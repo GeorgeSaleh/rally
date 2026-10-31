@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Rally</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@600;800&family=Instrument+Sans:wght@400;500;600&display=swap">
+<style>
+:root{--bg:#10121d;--rail:#0b0d16;--panel:#171a2a;--raised:#20243a;--line:#2a2f4a;--text:#e9ebf7;--muted:#8f95b8;--accent:#ffb547;--on-accent:#1c1300;--pink:#ff5c8a;--mine:#2b2540;
+--head:"Bricolage Grotesque","Trebuchet MS",sans-serif;--body:"Instrument Sans","Segoe UI",system-ui,sans-serif;
+box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);color-scheme:dark}
+:root[data-theme="light"]{--bg:#f6f4fb;--rail:#e6e2f2;--panel:#fff;--raised:#eeebf7;--line:#d9d4ea;--text:#1d1b2e;--muted:#6b6786;--accent:#e08a00;--on-accent:#fff;--pink:#d6336c;--mine:#fff1db;color-scheme:light}
+*,*::before,*::after{box-sizing:inherit}
+html,body{height:100%;margin:0}
+body{background:var(--bg);color:var(--text);font:15px/1.45 var(--body);overflow:hidden}
+button{font:inherit;color:inherit;cursor:pointer;border:0;background:none}
+button:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.app{display:grid;grid-template-columns:72px 240px 1fr 220px;height:100%}
+.rail{background:var(--rail);display:flex;flex-direction:column;align-items:center;gap:10px;padding:12px 0;overflow-y:auto}
+.logo{font:800 26px var(--head);color:var(--accent);margin-bottom:6px}
+.grp{width:46px;height:46px;border-radius:16px;background:var(--raised);font:800 17px var(--head);display:grid;place-items:center;transition:border-radius .15s}
+.grp:hover,.grp[aria-current=true]{border-radius:23px;background:var(--accent);color:var(--on-accent)}
+.grp.add{background:none;border:2px dashed var(--line);color:var(--muted)}
+.side{background:var(--panel);display:flex;flex-direction:column;min-height:0}
+.side h2{margin:0;padding:16px;font:800 18px var(--head);border-bottom:1px solid var(--line)}
+.side .code{padding:10px 16px;font-size:13px;color:var(--muted)}
+.side .code b{color:var(--accent);letter-spacing:.06em}
+.chs{padding:8px;overflow-y:auto;flex:1}
+.ch{display:block;width:100%;text-align:left;padding:8px 10px;border-radius:8px;color:var(--muted)}
+.ch:hover{background:var(--raised);color:var(--text)}
+.ch[aria-current=true]{background:var(--raised);color:var(--text);font-weight:600}
+.ch i{font-style:normal;color:var(--pink);float:right;font-size:12px;font-weight:600}
+.me{padding:10px 12px;border-top:1px solid var(--line);display:flex;align-items:center;gap:10px;font-weight:500}
+.me button{margin-left:auto;color:var(--muted);font-size:13px}
+.av{width:34px;height:34px;border-radius:50%;display:grid;place-items:center;font:800 14px var(--head);color:#10121d;flex:none}
+.main{display:flex;flex-direction:column;min-width:0;min-height:0}
+.top{display:flex;align-items:center;gap:10px;padding:12px 16px;border-bottom:1px solid var(--line)}
+.top h1{margin:0;font:800 18px var(--head)}
+.top .sp{flex:1}
+.top button{padding:6px 10px;border-radius:8px;color:var(--muted)}
+.top button:hover{background:var(--raised);color:var(--text)}
+.nav{display:none}
+.msgs{flex:1;overflow-y:auto;padding:16px;display:flex;flex-direction:column;gap:14px}
+.m{display:flex;gap:12px;max-width:640px}
+.m .b{min-width:0}
+.m .n{font-weight:600}.m .t{color:var(--muted);font-size:12px;margin-left:8px}
+.m p{margin:2px 0 0;overflow-wrap:anywhere}
+.m.mine p{background:var(--mine);padding:6px 10px;border-radius:4px 12px 12px 12px;display:inline-block}
+.m .act{margin-top:4px;display:flex;gap:6px}
+.m .act button{font-size:12px;padding:2px 8px;border-radius:999px;background:var(--raised);color:var(--muted)}
+.m .act button:hover{color:var(--text)}
+.typing{padding:0 16px 6px;height:22px;font-size:13px;color:var(--muted)}
+.cmp{display:flex;gap:8px;padding:0 16px 16px}
+.cmp input{flex:1;min-width:0;background:var(--raised);border:1px solid var(--line);color:var(--text);padding:12px 14px;border-radius:12px;font:inherit}
+.cmp button{background:var(--accent);color:var(--on-accent);font-weight:600;padding:0 18px;border-radius:12px}
+.mem{background:var(--panel);padding:16px;overflow-y:auto;border-left:1px solid var(--line)}
+.mem h3{margin:0 0 10px;font:600 14px var(--body);color:var(--muted)}
+.mem div{display:flex;align-items:center;gap:10px;padding:5px 0}
+.mem small{color:var(--muted);margin-left:auto}
+.toast{position:fixed;left:50%;bottom:calc(24px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--raised);border:1px solid var(--line);padding:10px 16px;border-radius:10px;opacity:0;pointer-events:none;transition:opacity .2s;z-index:30}
+.toast.on{opacity:1}
+.scrim{display:none}
+.ov{position:fixed;inset:0;background:#000a;display:none;align-items:center;justify-content:center;padding:16px;z-index:40}.ov.on{display:flex}
+.dlg{background:var(--panel);border:1px solid var(--line);border-radius:16px;width:100%;max-width:460px;max-height:100%;overflow-y:auto;padding:20px}
+.dlg h2{margin:0 0 4px;font:800 20px var(--head)}.dlg .sub{color:var(--muted);margin:0 0 12px;font-size:14px}
+.quote{background:var(--raised);border-left:3px solid var(--pink);padding:8px 12px;border-radius:6px;margin-bottom:14px;font-size:14px;overflow-wrap:anywhere}
+.quote b{display:block;font-size:13px;color:var(--muted);font-weight:600}
+.dlg fieldset{border:0;padding:0;margin:0 0 12px}.dlg legend{font-weight:600;margin-bottom:6px;padding:0}
+.opt{display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:8px;cursor:pointer}.opt:hover{background:var(--raised)}.opt input{accent-color:var(--accent)}
+.dlg label.lb{display:block;font-weight:600;margin-bottom:6px}
+.dlg textarea{width:100%;min-height:90px;resize:vertical;background:var(--raised);border:1px solid var(--line);color:var(--text);border-radius:10px;padding:10px 12px;font:inherit}
+.dlg textarea:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.hint{font-size:13px;color:var(--muted);margin:6px 0 12px}
+.dlg .row{display:flex;gap:8px;justify-content:flex-end;margin-top:14px}
+.dlg .row button{padding:10px 16px;border-radius:10px;font-weight:600}
+.dlg .cancel{background:var(--raised);color:var(--text)}.dlg .go{background:var(--pink);color:#fff}.dlg .go:disabled{opacity:.4;cursor:not-allowed}
+.blk{display:flex;gap:8px;align-items:center;font-size:14px}.blk input{accent-color:var(--accent)}
+@media (max-width:1100px){.app{grid-template-columns:72px 220px 1fr}.mem{position:fixed;right:0;top:0;bottom:0;width:240px;transform:translateX(100%);transition:transform .2s;z-index:20;padding-top:calc(16px + env(safe-area-inset-top,0px))}.show-mem .mem{transform:none}}
+@media (max-width:760px){.app{grid-template-columns:1fr}.left{position:fixed;left:0;top:0;bottom:0;width:min(310px,88vw);display:grid;grid-template-columns:72px 1fr;transform:translateX(-100%);transition:transform .2s;z-index:20;padding-top:env(safe-area-inset-top,0px)}.show-left .left{transform:none}.nav{display:inline-block}.show-left .scrim,.show-mem .scrim{display:block;position:fixed;inset:0;background:#0009;z-index:10}}
+@media (min-width:761px){.left{display:contents}}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+<div class="app" id="app">
+  <div class="left">
+    <nav class="rail" id="rail" aria-label="Groups"></nav>
+    <aside class="side">
+      <h2 id="gname"></h2>
+      <div class="code">Invite code: <b id="gcode"></b></div>
+      <div class="chs" id="chs"></div>
+      <div class="me"><span class="av" style="background:#ffb547">Y</span>you<button id="theme">Light mode</button></div>
+    </aside>
+  </div>
+  <main class="main">
+    <header class="top">
+      <button class="nav" id="navbtn" aria-label="Open groups">Menu</button>
+      <h1 id="cname"></h1><span class="sp"></span>
+      <button id="membtn">Members</button>
+    </header>
+    <div class="msgs" id="msgs" aria-live="polite"></div>
+    <div class="typing" id="typing"></div>
+    <div class="cmp"><input id="inp" placeholder="Message this channel" aria-label="Message" autocomplete="off"><button id="send">Send</button></div>
+  </main>
+  <aside class="mem" id="mem"><h3>Members</h3><div id="memlist"></div></aside>
+  <div class="scrim" id="scrim"></div>
+</div>
+<div class="ov" id="ov"><div class="dlg" role="dialog" aria-modal="true" aria-labelledby="rt">
+<h2 id="rt">Report message</h2>
+<p class="sub">Reports go to the group admins, not to the person you report.</p>
+<div class="quote"><b id="rwho"></b><span id="rtxt"></span></div>
+<fieldset><legend>What’s the problem?</legend><div id="rreasons"></div></fieldset>
+<label class="lb" for="rdesc">What was offensive or harmful about it?</label>
+<textarea id="rdesc" maxlength="500" placeholder="Explain what was said or done and why it broke the rules. Add context if the message alone isn’t clear."></textarea>
+<p class="hint" id="rhint"></p>
+<label class="blk"><input type="checkbox" id="rblock"> Also block this person</label>
+<div class="row"><button class="cancel" id="rcancel">Cancel</button><button class="go" id="rgo" disabled>Send report</button></div>
+</div></div>
+<div class="toast" id="toast" role="status"></div>
+<script>
+const COL=["#ffb547","#ff5c8a","#7fd6ff","#b69cff","#8be28b"];
+const G={
+ Homeroom:{k:"H",code:"HR-4F7K",ch:{general:[["Maya","Anyone else finish the bio worksheet?","3:02 PM"],["Jonah","Page 4 was brutal. Study group at lunch?","3:04 PM"],["Priya","I’m in. Rally gets a table by the windows.","3:05 PM"]],homework:[["Jonah","Math test is moved to Friday.","1:20 PM"]],memes:[["Maya","Posting the teacher-sneeze clip tomorrow.","9:10 AM"]]},mem:["Maya","Jonah","Priya","Eli"]},
+ Band:{k:"B",code:"BD-92QX",ch:{general:[["Eli","Rehearsal is in room 12 on Thursday.","4:40 PM"],["Priya","Bringing the extra amp.","4:41 PM"]],setlist:[["Eli","Opener: the new one. Closer: the old one.","4:50 PM"]]},mem:["Eli","Priya","Sam"]},
+ Gaming:{k:"G",code:"GM-3LZA",ch:{general:[["Sam","Friday lobby at 7?","6:15 PM"],["Jonah","Yes. I’m bringing snacks.","6:16 PM"]],clips:[["Sam","This clutch was an accident, I swear.","5:00 PM"]]},mem:["Sam","Jonah","Maya"]}
+};
+const $=id=>document.getElementById(id);
+let g="Homeroom",c="general";
+const col=n=>COL[[...n].reduce((a,x)=>a+x.charCodeAt(0),0)%COL.length];
+function av(n){const s=document.createElement("span");s.className="av";s.style.background=col(n);s.textContent=n[0];return s}
+function toast(t){const e=$("toast");e.textContent=t;e.classList.add("on");clearTimeout(toast.t);toast.t=setTimeout(()=>e.classList.remove("on"),2200)}
+function rail(){const r=$("rail");r.textContent="";const l=document.createElement("div");l.className="logo";l.textContent="R";r.append(l);
+ for(const n in G){const b=document.createElement("button");b.className="grp";b.textContent=G[n].k;b.title=n;b.setAttribute("aria-label",n);b.setAttribute("aria-current",n===g);b.onclick=()=>{g=n;c=Object.keys(G[n].ch)[0];draw()};r.append(b)}
+ const a=document.createElement("button");a.className="grp add";a.textContent="+";a.title="Create or join with a code";a.setAttribute("aria-label","Create or join a group");a.onclick=()=>toast("Joining with an invite code comes in Phase 5");r.append(a)}
+function chans(){$("gname").textContent=g;$("gcode").textContent=G[g].code;const w=$("chs");w.textContent="";
+ for(const n in G[g].ch){const b=document.createElement("button");b.className="ch";b.textContent="# "+n;b.setAttribute("aria-current",n===c);if(n==="homework"||n==="clips"){const i=document.createElement("i");i.textContent="2";b.append(i)}b.onclick=()=>{c=n;draw();document.body.classList.remove("show-left");$("app").classList.remove("show-left")};w.append(b)}}
+function msg(n,t,time,mine){const m=document.createElement("div");m.className="m"+(mine?" mine":"");const b=document.createElement("div");b.className="b";
+ const h=document.createElement("div");const nm=document.createElement("span");nm.className="n";nm.textContent=n;const tm=document.createElement("span");tm.className="t";tm.textContent=time;h.append(nm,tm);
+ const p=document.createElement("p");p.textContent=t;const a=document.createElement("div");a.className="act";
+ for(const [l,f] of [["React",()=>toast("Reactions come in Phase 5")],["Reply",()=>{$("inp").focus();$("inp").placeholder="Replying to "+n}],["Report",()=>openReport(n,t)]]){const x=document.createElement("button");x.textContent=l;x.onclick=f;a.append(x)}
+ b.append(h,p,a);m.append(av(n),b);$("msgs").append(m)}
+function draw(){rail();chans();$("cname").textContent="# "+c;const w=$("msgs");w.textContent="";G[g].ch[c].forEach(x=>msg(...x));w.scrollTop=w.scrollHeight;
+ const l=$("memlist");l.textContent="";G[g].mem.forEach((n,i)=>{const d=document.createElement("div");d.append(av(n),n);if(!i){const s=document.createElement("small");s.textContent="admin";d.append(s)}l.append(d)});
+ $("inp").placeholder="Message #"+c;$("typing").textContent=""}
+function send(){const v=$("inp");const t=v.value.trim();if(!t)return;const now=new Date().toLocaleTimeString([],{hour:"numeric",minute:"2-digit"});
+ G[g].ch[c].push(["You",t,now]);msg("You",t,now,true);v.value="";$("msgs").scrollTop=1e9;
+ const who=G[g].mem[0];$("typing").textContent=who+" is typing…";setTimeout(()=>{if($("typing").textContent){$("typing").textContent=""}},1500)}
+const REASONS=["Harassment or bullying","Hate or discrimination","Threats or violence","Sexual content","Spam or scams","Something else"];
+let rep=null;
+REASONS.forEach(r=>{const l=document.createElement("label");l.className="opt";const i=document.createElement("input");i.type="radio";i.name="reason";i.value=r;i.onchange=chk;l.append(i,r);$("rreasons").append(l)});
+function chk(){const r=document.querySelector('input[name=reason]:checked');const n=$("rdesc").value.trim().length;
+ $("rhint").textContent=n<20?"Add at least "+(20-n)+" more characters so admins can review this fairly.":"Admins will read this alongside the message. Reports with no real violation are dismissed, and repeated false reports can lead to a warning.";
+ $("rgo").disabled=!(r&&n>=20)}
+function openReport(n,t){rep={n,t};$("rwho").textContent=n+" wrote:";$("rtxt").textContent=t;$("rdesc").value="";$("rblock").checked=false;document.querySelectorAll('input[name=reason]').forEach(x=>x.checked=false);chk();$("ov").classList.add("on");$("rreasons").querySelector("input").focus()}
+function closeReport(){$("ov").classList.remove("on")}
+$("rdesc").oninput=chk;$("rcancel").onclick=closeReport;$("ov").onclick=e=>{if(e.target===$("ov"))closeReport()};
+document.addEventListener("keydown",e=>{if(e.key==="Escape")closeReport()});
+$("rgo").onclick=()=>{const b=$("rblock").checked;closeReport();toast(b?"Report sent and "+rep.n+" blocked":"Report sent to group admins")};
+$("send").onclick=send;$("inp").onkeydown=e=>{if(e.key==="Enter")send()};
+const A=$("app");
+$("navbtn").onclick=()=>document.body.classList.toggle("show-left");
+$("membtn").onclick=()=>document.body.classList.toggle("show-mem");
+$("scrim").onclick=()=>document.body.classList.remove("show-left","show-mem");
+$("theme").onclick=()=>{const r=document.documentElement;const l=r.dataset.theme==="light";r.dataset.theme=l?"dark":"light";$("theme").textContent=l?"Light mode":"Dark mode"};
+draw();
+</script>
+<style>body.show-left .left{transform:none}body.show-left .scrim,body.show-mem .scrim{display:block}body.show-mem .mem{transform:none}@media (min-width:761px){body.show-left .scrim{display:none}}</style>
+</body>
+</html>
