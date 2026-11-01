@@ -1,0 +1,16 @@
+[hidden]{display:none!important}
+.auth-ov{position:fixed;inset:0;z-index:50;background:var(--bg);display:flex;align-items:center;justify-content:center;padding:16px;overflow-y:auto}
+.auth-card{width:100%;max-width:400px;background:var(--panel);border:1px solid var(--line);border-radius:18px;padding:24px}
+.auth-logo{font:800 28px var(--head);color:var(--accent)}
+.auth-card h2{margin:4px 0 14px;font:800 20px var(--head)}
+.auth-tabs{display:flex;gap:6px;background:var(--raised);padding:4px;border-radius:12px;margin-bottom:14px}
+.auth-tabs button{flex:1;padding:8px;border-radius:9px;color:var(--muted);font-weight:600}
+.auth-tabs button.on{background:var(--accent);color:var(--on-accent)}
+.auth-card label{display:block;font-weight:600;font-size:14px;margin-bottom:12px}
+.auth-card input{display:block;width:100%;margin-top:6px;padding:11px 12px;border-radius:10px;border:1px solid var(--line);background:var(--raised);color:var(--text);font:inherit}
+.auth-msg{min-height:20px;margin:0 0 10px;font-size:14px}
+.auth-msg.bad{color:var(--pink)}
+.auth-msg.ok{color:var(--accent)}
+.auth-go{width:100%;padding:12px;border-radius:12px;background:var(--accent);color:var(--on-accent);font-weight:700}
+.auth-go:disabled{opacity:.5}
+.auth-note{margin:12px 0 0;font-size:13px;color:var(--muted)}

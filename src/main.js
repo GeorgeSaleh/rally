@@ -1,4 +1,5 @@
 import "./style.css";
+import "./auth.js";
 const COL=["#ffb547","#ff5c8a","#7fd6ff","#b69cff","#8be28b"];
 const G={
  Homeroom:{k:"H",code:"HR-4F7K",ch:{general:[["Maya","Anyone else finish the bio worksheet?","3:02 PM"],["Jonah","Page 4 was brutal. Study group at lunch?","3:04 PM"],["Priya","I’m in. Rally gets a table by the windows.","3:05 PM"]],homework:[["Jonah","Math test is moved to Friday.","1:20 PM"]],memes:[["Maya","Posting the teacher-sneeze clip tomorrow.","9:10 AM"]]},mem:["Maya","Jonah","Priya","Eli"]},
