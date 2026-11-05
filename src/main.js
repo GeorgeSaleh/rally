@@ -20,7 +20,12 @@ css.textContent = `
 .empty{margin:auto;text-align:center;color:var(--muted);max-width:320px}
 .empty h2{color:var(--text);font:800 20px var(--head);margin:0 0 6px}
 .empty button{margin:12px 6px 0;background:var(--accent);color:var(--on-accent);font-weight:700;padding:10px 16px;border-radius:12px}
-.m .act button.del:hover,.m .act button.sure{color:#fff;background:var(--pink)}`;
+.m .act button.del:hover,.m .act button.sure{color:#fff;background:var(--pink)}
+.editbox{display:flex;gap:6px;margin-top:4px;max-width:520px}
+.editbox input{flex:1;min-width:0;padding:8px 10px;border-radius:10px;border:1px solid var(--line);background:var(--raised);color:var(--text);font:inherit}
+.editbox button{padding:6px 12px;border-radius:10px;background:var(--raised);color:var(--text);font-weight:600}
+.editbox button:first-of-type{background:var(--accent);color:var(--on-accent)}
+.ed{font-size:12px;color:var(--muted)}`;
 document.head.append(css);
 
 document.body.insertAdjacentHTML("beforeend", `
@@ -165,6 +170,55 @@ function removeMsg(id) {
   if (el) el.remove();
   shown.delete(String(id));
 }
+function setText(pe, content, edited) {
+  pe.dataset.raw = content;
+  pe.textContent = content;
+  if (edited) {
+    const s = document.createElement("span");
+    s.className = "ed";
+    s.textContent = " (edited)";
+    pe.append(s);
+  }
+}
+function applyEdit(m) {
+  const el = $("msgs").querySelector('[data-id="' + String(m.id) + '"]');
+  if (!el) return;
+  setText(el.querySelector(".mt"), m.content, !!m.edited_at);
+}
+function startEdit(el, pe, id) {
+  if (el.querySelector(".editbox")) return;
+  const box = document.createElement("div");
+  box.className = "editbox";
+  const input = document.createElement("input");
+  input.value = pe.dataset.raw;
+  input.maxLength = 2000;
+  input.setAttribute("aria-label", "Edit message");
+  const save = document.createElement("button");
+  save.textContent = "Save";
+  const cancel = document.createElement("button");
+  cancel.textContent = "Cancel";
+  const close = () => { box.remove(); pe.hidden = false; };
+  const commit = async () => {
+    const t = input.value.trim();
+    if (!t) return toast("A message cannot be empty.");
+    if (t === pe.dataset.raw) return close();
+    save.disabled = true;
+    const { data, error } = await supabase.from("messages").update({ content: t }).eq("id", id).select("id,content,edited_at");
+    if (error || !data || !data.length) { save.disabled = false; return toast("Could not edit that message."); }
+    applyEdit(data[0]);
+    close();
+  };
+  save.onclick = commit;
+  cancel.onclick = close;
+  input.onkeydown = (e) => {
+    if (e.key === "Enter") commit();
+    if (e.key === "Escape") close();
+  };
+  pe.hidden = true;
+  pe.after(box);
+  box.append(input, save, cancel);
+  input.focus();
+}
 function msgEl(m, p) {
   const mine = m.user_id === me.id;
   const el = document.createElement("div");
@@ -181,7 +235,8 @@ function msgEl(m, p) {
   tm.textContent = fmt(m.created_at);
   h.append(nm, tm);
   const pe = document.createElement("p");
-  pe.textContent = m.content;
+  pe.className = "mt";
+  setText(pe, m.content, !!m.edited_at);
   const a = document.createElement("div");
   a.className = "act";
   const acts = [
@@ -194,6 +249,12 @@ function msgEl(m, p) {
     x.textContent = l;
     x.onclick = f;
     a.append(x);
+  }
+  if (mine) {
+    const ed = document.createElement("button");
+    ed.textContent = "Edit";
+    ed.onclick = () => startEdit(el, pe, m.id);
+    a.append(ed);
   }
   if (mine || myRole === "admin") {
     const d = document.createElement("button");
@@ -277,7 +338,7 @@ async function openChannel(id) {
   if (!ch) return;
   const { data, error } = await supabase
     .from("messages")
-    .select("id,channel_id,user_id,content,created_at")
+    .select("id,channel_id,user_id,content,created_at,edited_at")
     .eq("channel_id", id)
     .order("created_at", { ascending: false })
     .limit(100);
@@ -292,6 +353,7 @@ async function openChannel(id) {
   live = supabase
     .channel("room-" + id + "-" + token)
     .on("postgres_changes", { event: "INSERT", schema: "public", table: "messages", filter: "channel_id=eq." + id }, (p) => addMsg(p.new, true))
+    .on("postgres_changes", { event: "UPDATE", schema: "public", table: "messages", filter: "channel_id=eq." + id }, (p) => applyEdit(p.new))
     .on("postgres_changes", { event: "DELETE", schema: "public", table: "messages" }, (p) => removeMsg(p.old.id))
     .subscribe();
 }
@@ -305,7 +367,7 @@ async function send() {
   const { data, error } = await supabase
     .from("messages")
     .insert({ channel_id: cid, user_id: me.id, content: t })
-    .select("id,channel_id,user_id,content,created_at")
+    .select("id,channel_id,user_id,content,created_at,edited_at")
     .single();
   sending = false;
   const ch = channels.find((c) => c.id === cid);
