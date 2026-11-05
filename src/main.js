@@ -7,7 +7,7 @@ const $ = (id) => document.getElementById(id);
 const COL = ["#ffb547", "#ff5c8a", "#7fd6ff", "#b69cff", "#8be28b"];
 const prof = {};
 const shown = new Set();
-let me = null, myRole = "member", groups = [], channels = [], gid = null, cid = null, live = null, sending = false;
+let me = null, myRole = "member", groups = [], channels = [], curMembers = [], blocked = new Set(), gid = null, cid = null, live = null, sending = false;
 
 const css = document.createElement("style");
 css.textContent = `
@@ -25,7 +25,15 @@ css.textContent = `
 .editbox input{flex:1;min-width:0;padding:8px 10px;border-radius:10px;border:1px solid var(--line);background:var(--raised);color:var(--text);font:inherit}
 .editbox button{padding:6px 12px;border-radius:10px;background:var(--raised);color:var(--text);font-weight:600}
 .editbox button:first-of-type{background:var(--accent);color:var(--on-accent)}
-.ed{font-size:12px;color:var(--muted)}`;
+.ed{font-size:12px;color:var(--muted)}
+#memlist>div{flex-wrap:wrap}
+.mact{flex-basis:100%;display:flex;gap:6px;margin:0 0 4px 44px}
+.mb{font-size:11px;padding:2px 8px;border-radius:8px;background:var(--raised);color:var(--muted)}
+.mb:hover{color:var(--text)}
+.rep-item{background:var(--raised);border-left:3px solid var(--pink);border-radius:8px;padding:10px;margin-bottom:10px;font-size:14px;overflow-wrap:anywhere}
+.rep-item b{display:block;margin-bottom:4px}
+.rep-item .acts{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+.rep-item .acts button{padding:5px 10px;border-radius:8px;background:var(--panel);color:var(--text);font-weight:600;font-size:13px}`;
 document.head.append(css);
 
 document.body.insertAdjacentHTML("beforeend", `
@@ -36,6 +44,11 @@ document.body.insertAdjacentHTML("beforeend", `
 <input class="tx" id="gin" maxlength="40" autocomplete="off">
 <p class="gmsg" id="gmsg" role="status"></p>
 <div class="row"><button class="cancel" id="gcancel">Cancel</button><button class="go amber" id="ggo">Create group</button></div>
+</div></div>
+<div class="ov" id="repov"><div class="dlg" role="dialog" aria-modal="true" aria-labelledby="rept">
+<h2 id="rept">Open reports</h2>
+<div id="replist"></div>
+<div class="row"><button class="cancel" id="repclose">Close</button></div>
 </div></div>`);
 
 function toast(t) {
@@ -121,6 +134,37 @@ function drawChans() {
       openChannel(data.id);
     };
     w.append(n);
+    const rb = document.createElement("button");
+    rb.className = "ch";
+    rb.textContent = "Reports";
+    rb.onclick = openReports;
+    w.append(rb);
+    const ib = document.createElement("button");
+    ib.className = "ch";
+    ib.textContent = "New invite code";
+    ib.onclick = async () => {
+      if (!confirm("Make a new invite code? The old code will stop working.")) return;
+      const { data, error } = await supabase.rpc("regenerate_invite", { p_group: gid });
+      if (error) return toast("Could not change the code.");
+      const g = groups.find((x) => x.id === gid);
+      if (g) g.invite_code = data;
+      $("gcode").textContent = data;
+      toast("New invite code ready.");
+    };
+    w.append(ib);
+  }
+  if (gid) {
+    const lb = document.createElement("button");
+    lb.className = "ch";
+    lb.textContent = "Leave group";
+    lb.onclick = async () => {
+      if (!confirm("Leave this group?")) return;
+      const { error } = await supabase.rpc("leave_group", { p_group: gid });
+      if (error) return toast(error.message.includes("Only admin") ? "You are the only admin, so you cannot leave yet." : "Could not leave the group.");
+      await loadGroups();
+      toast("You left the group.");
+    };
+    w.append(lb);
   }
 }
 function drawMembers(members) {
@@ -136,6 +180,33 @@ function drawMembers(members) {
         const s = document.createElement("small");
         s.textContent = "admin";
         d.append(s);
+      }
+      if (me && m.user_id !== me.id) {
+        const acts = document.createElement("div");
+        acts.className = "mact";
+        const isB = blocked.has(m.user_id);
+        const bl = document.createElement("button");
+        bl.className = "mb";
+        bl.textContent = isB ? "Unblock" : "Block";
+        bl.onclick = () => (isB ? unblockUser(m.user_id) : blockUser(m.user_id));
+        acts.append(bl);
+        if (myRole === "admin" && m.role !== "admin") {
+          const rm = document.createElement("button");
+          rm.className = "mb";
+          rm.textContent = "Remove";
+          rm.onclick = () => {
+            if (confirm("Remove " + p.username + " from this group?")) modMember(m.user_id, false, false);
+          };
+          const bn = document.createElement("button");
+          bn.className = "mb";
+          bn.textContent = "Ban";
+          bn.onclick = () => {
+            if (!confirm("Ban " + p.username + "? They will not be able to rejoin with the invite code.")) return;
+            modMember(m.user_id, true, confirm("Also delete all of their messages in this group?"));
+          };
+          acts.append(rm, bn);
+        }
+        d.append(acts);
       }
       l.append(d);
     });
@@ -224,6 +295,7 @@ function msgEl(m, p) {
   const el = document.createElement("div");
   el.className = "m" + (mine ? " mine" : "");
   el.dataset.id = String(m.id);
+  el.dataset.user = m.user_id;
   const b = document.createElement("div");
   b.className = "b";
   const h = document.createElement("div");
@@ -243,7 +315,7 @@ function msgEl(m, p) {
     ["React", () => toast("Reactions come in Phase 6")],
     ["Reply", () => { $("inp").focus(); $("inp").placeholder = "Replying to " + p.username; }],
   ];
-  if (!mine) acts.push(["Report", () => openReport(p.username, m.content)]);
+  if (!mine) acts.push(["Report", () => openReport(p.username, m.content, m.id, m.user_id)]);
   for (const [l, f] of acts) {
     const x = document.createElement("button");
     x.textContent = l;
@@ -279,7 +351,7 @@ function msgEl(m, p) {
 }
 async function addMsg(m, scroll) {
   const key = String(m.id);
-  if (!me || shown.has(key) || (m.channel_id && m.channel_id !== cid)) return;
+  if (!me || shown.has(key) || blocked.has(m.user_id) || (m.channel_id && m.channel_id !== cid)) return;
   shown.add(key);
   const p = await who(m.user_id);
   const w = $("msgs");
@@ -288,6 +360,79 @@ async function addMsg(m, scroll) {
   if (scroll && (near || m.user_id === me.id)) w.scrollTop = w.scrollHeight;
 }
 
+async function loadBlocks() {
+  const { data } = await supabase.from("blocks").select("blocked_id");
+  blocked = new Set((data || []).map((x) => x.blocked_id));
+}
+async function init() {
+  await loadBlocks();
+  await loadGroups();
+}
+async function blockUser(uid) {
+  const { error } = await supabase.from("blocks").insert({ blocker_id: me.id, blocked_id: uid });
+  if (error && error.code !== "23505") return toast("Could not block that person.");
+  blocked.add(uid);
+  $("msgs").querySelectorAll('[data-user="' + uid + '"]').forEach((e) => e.remove());
+  drawMembers(curMembers);
+  toast("Blocked. You will not see their messages.");
+}
+async function unblockUser(uid) {
+  const { error } = await supabase.from("blocks").delete().eq("blocker_id", me.id).eq("blocked_id", uid);
+  if (error) return toast("Could not unblock.");
+  blocked.delete(uid);
+  drawMembers(curMembers);
+  openChannel(cid);
+  toast("Unblocked.");
+}
+async function modMember(uid, ban, wipe) {
+  const { error } = await supabase.rpc("remove_member", { p_group: gid, p_user: uid, p_ban: ban, p_wipe: wipe });
+  if (error) return toast("Could not do that.");
+  await openGroup(gid);
+  toast(ban ? "Member banned." : "Member removed.");
+}
+async function openReports() {
+  $("repov").classList.add("on");
+  const list = $("replist");
+  list.textContent = "Loading...";
+  const { data, error } = await supabase
+    .from("reports")
+    .select("id,reason,description,message_text,reported_user,created_at")
+    .eq("group_id", gid)
+    .eq("status", "open")
+    .order("created_at");
+  list.textContent = "";
+  if (error) { list.textContent = "Could not load reports."; return; }
+  if (!data.length) { list.textContent = "No open reports. All quiet."; return; }
+  for (const r of data) {
+    const p = await who(r.reported_user);
+    const item = document.createElement("div");
+    item.className = "rep-item";
+    const t = document.createElement("b");
+    t.textContent = p.username + " - " + r.reason;
+    const q = document.createElement("div");
+    q.textContent = "Message: " + r.message_text;
+    const d = document.createElement("div");
+    d.textContent = "Why: " + r.description;
+    const acts = document.createElement("div");
+    acts.className = "acts";
+    const btns = [["Dismiss", "dismiss"], ["Delete message", "delete_message"], ["Remove member", "remove_member"], ["Ban", "ban_member"]];
+    for (const [label, act] of btns) {
+      const b = document.createElement("button");
+      b.textContent = label;
+      b.onclick = async () => {
+        if (act !== "dismiss" && !confirm(label + "?")) return;
+        const { error: e2 } = await supabase.rpc("resolve_report", { rid: r.id, act });
+        if (e2) return toast(e2.message.toLowerCase().includes("admin") ? "You cannot do that to an admin." : "Could not do that.");
+        item.remove();
+        if (act !== "dismiss") openGroup(gid);
+        toast("Done.");
+      };
+      acts.append(b);
+    }
+    item.append(t, q, d, acts);
+    list.append(item);
+  }
+}
 async function loadGroups(select) {
   const { data, error } = await supabase.from("groups").select("id,name,invite_code").order("created_at");
   if (error) return toast("Could not load groups.");
@@ -319,6 +464,7 @@ async function openGroup(id) {
   myRole = mineRow ? mineRow.role : "member";
   const { data: ps } = await supabase.from("profiles").select("id,username,color").in("id", members.map((m) => m.user_id));
   (ps || []).forEach((p) => (prof[p.id] = p));
+  curMembers = members;
   drawMembers(members);
   if (!channels.some((c) => c.id === cid)) cid = channels[0] ? channels[0].id : null;
   await openChannel(cid);
@@ -372,7 +518,7 @@ async function send() {
   sending = false;
   const ch = channels.find((c) => c.id === cid);
   v.placeholder = ch ? "Message #" + ch.name : "Message";
-  if (error) { v.value = t; return toast("Message not sent. Try again."); }
+  if (error) { v.value = t; return toast(error.message.includes("Slow down") ? "You are sending messages too fast. Wait a moment." : "Message not sent. Try again."); }
   addMsg(data, true);
 }
 
@@ -400,7 +546,7 @@ async function submitG() {
     ? await supabase.rpc("create_group", { group_name: v })
     : await supabase.rpc("join_group", { code: v });
   $("ggo").disabled = false;
-  if (error) return gMsg(error.message.includes("Invalid invite") ? "That invite code does not match any group." : "Something went wrong. Try again.");
+  if (error) return gMsg(error.message.includes("Invalid invite") ? "That invite code does not match any group." : error.message.includes("banned") ? "You are banned from that group." : "Something went wrong. Try again.");
   closeG();
   await loadGroups(data);
 }
@@ -432,8 +578,8 @@ function chk() {
     : "Admins will read this alongside the message. Reports with no real violation are dismissed, and repeated false reports can lead to a warning.";
   $("rgo").disabled = !(r && n >= 20);
 }
-function openReport(n, t) {
-  rep = { n, t };
+function openReport(n, t, id, uid) {
+  rep = { n, t, id, uid };
   $("rwho").textContent = n + " wrote:";
   $("rtxt").textContent = t;
   $("rdesc").value = "";
@@ -447,13 +593,23 @@ function closeReport() { $("ov").classList.remove("on"); }
 $("rdesc").oninput = chk;
 $("rcancel").onclick = closeReport;
 $("ov").onclick = (e) => { if (e.target === $("ov")) closeReport(); };
-$("rgo").onclick = () => {
+$("rgo").onclick = async () => {
+  const r = document.querySelector("input[name=reason]:checked");
   const b = $("rblock").checked;
+  $("rgo").disabled = true;
+  const { error } = await supabase.rpc("report_message", { msg_id: rep.id, p_reason: r.value, p_description: $("rdesc").value.trim() });
+  if (error) {
+    $("rgo").disabled = false;
+    return toast(error.message.includes("Already") ? "You already reported that message." : error.message.includes("Too many") ? "You have sent too many reports. Try again later." : "Could not send the report.");
+  }
   closeReport();
-  toast(b ? "Report sent and " + rep.n + " blocked (saving reports comes in Phase 5)" : "Report sent (saving reports comes in Phase 5)");
+  if (b) await blockUser(rep.uid);
+  toast("Report sent to the group admins.");
 };
+$("repclose").onclick = () => $("repov").classList.remove("on");
+$("repov").onclick = (e) => { if (e.target === $("repov")) $("repov").classList.remove("on"); };
 document.addEventListener("keydown", (e) => {
-  if (e.key === "Escape") { closeReport(); closeG(); }
+  if (e.key === "Escape") { closeReport(); closeG(); $("repov").classList.remove("on"); }
 });
 
 $("gcode").title = "Click to copy";
@@ -478,6 +634,8 @@ function resetAll() {
   channels = [];
   gid = null;
   cid = null;
+  curMembers = [];
+  blocked = new Set();
   if (live) { supabase.removeChannel(live); live = null; }
   drawEmpty();
 }
@@ -485,7 +643,7 @@ supabase.auth.onAuthStateChange((_event, session) => {
   const u = session && session.user;
   setTimeout(() => {
     if (u) {
-      if (!me || me.id !== u.id) { me = u; loadGroups(); }
+      if (!me || me.id !== u.id) { me = u; init(); }
     } else if (me) {
       resetAll();
     }
@@ -493,6 +651,6 @@ supabase.auth.onAuthStateChange((_event, session) => {
 });
 supabase.auth.getSession().then(({ data }) => {
   const u = data.session && data.session.user;
-  if (u && !me) { me = u; loadGroups(); }
+  if (u && !me) { me = u; init(); }
 });
 drawEmpty();
