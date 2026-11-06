@@ -1,6 +1,11 @@
 import "./style.css";
 import "./auth.js";
 import "./profile.js";
+import "./dm.js";
+import "./settings.js";
+import "./admin.js";
+import "./typing.js";
+import "./groupsettings.js";
 import "./reactions.js";
 import { supabase } from "./supabase.js";
 
@@ -181,6 +186,7 @@ function drawMembers(members) {
     .sort((a, b) => (a.m.role === "admin" ? 0 : 1) - (b.m.role === "admin" ? 0 : 1) || a.p.username.localeCompare(b.p.username))
     .forEach(({ m, p }) => {
       const d = document.createElement("div");
+            d.dataset.user = m.user_id;
       d.append(av(p), p.username);
       if (m.role === "admin") {
         const s = document.createElement("small");
@@ -660,3 +666,11 @@ supabase.auth.getSession().then(({ data }) => {
   if (u && !me) { me = u; init(); }
 });
 drawEmpty();
+window.rally = {
+  get gid() { return gid; },
+  get cid() { return cid; },
+  get role() { return myRole; },
+  get uid() { return me ? me.id : null; },
+  refresh: () => openGroup(gid),
+};
+  reload: (sel) => loadGroups(sel)
