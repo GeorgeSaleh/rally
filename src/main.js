@@ -1,6 +1,7 @@
 import "./style.css";
 import "./auth.js";
 import "./profile.js";
+import "./reactions.js";
 import { supabase } from "./supabase.js";
 
 const $ = (id) => document.getElementById(id);
