@@ -85,7 +85,12 @@ function drawRail() {
   r.textContent = "";
   const l = document.createElement("div");
   l.className = "logo";
-  l.textContent = "R";
+    const im = document.createElement("img");
+  im.src = "/favicon.svg";
+  im.alt = "Rally";
+  im.width = 40;
+  im.height = 40;
+  l.append(im);
   r.append(l);
   groups.forEach((g) => {
     const b = document.createElement("button");
