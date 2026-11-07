@@ -161,7 +161,14 @@ function dmEl(m) {
   h.append(n, tm);
   const pe = document.createElement("p");
   pe.textContent = m.content;
-  b.append(h, pe);
+    b.append(h, pe);
+  if (m.content === "📞 Started a call") {
+    const j = document.createElement("button");
+    j.textContent = "Join call";
+    j.style.cssText = "margin-top:6px;padding:6px 14px;border-radius:999px;background:var(--accent);color:var(--on-accent);font-weight:700";
+    j.onclick = () => window.rallyCall && window.rallyCall.joinDm(m.thread_id, $("dmname").textContent);
+    b.append(j);
+  }
   if (!mine) {
     const a = document.createElement("div");
     a.className = "act";
@@ -186,6 +193,7 @@ function addDm(m, scroll) {
 async function openThread(id) {
   current = id;
   unread.delete(id);
+    $("dmov").dataset.thread = id;
   badge();
   $("dmov").classList.add("chat");
   drawList();
@@ -309,6 +317,9 @@ function subscribe() {
     .on("postgres_changes", { event: "INSERT", schema: "public", table: "dm_messages" }, async (p) => {
       const m = p.new;
       if (blocked.has(m.sender)) return;
+            if (m.content === "📞 Started a call" && m.sender !== me) {
+        document.dispatchEvent(new CustomEvent("rally-call-invite", { detail: { thread: m.thread_id, from: m.sender } }));
+      }
       await loadNames([m.sender]);
       if (!threads.some((t) => t.id === m.thread_id)) await loadThreads();
       if (m.thread_id === current && $("dmov").classList.contains("on")) {

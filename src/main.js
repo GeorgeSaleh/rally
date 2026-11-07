@@ -6,6 +6,7 @@ import "./settings.js";
 import "./admin.js";
 import "./typing.js";
 import "./groupsettings.js";
+import "./call.js";
 import "./reactions.js";
 import { supabase } from "./supabase.js";
 
