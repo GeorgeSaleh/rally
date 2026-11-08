@@ -6,7 +6,10 @@ import "./settings.js";
 import "./admin.js";
 import "./typing.js";
 import "./groupsettings.js";
+import "./replies.js";
 import "./call.js";
+import "./polish.js";
+import "./notifications.js";
 import "./reactions.js";
 import { supabase } from "./supabase.js";
 
@@ -309,6 +312,7 @@ function msgEl(m, p) {
   el.className = "m" + (mine ? " mine" : "");
   el.dataset.id = String(m.id);
   el.dataset.user = m.user_id;
+    el.dataset.reply = m.reply_to || "";
   const b = document.createElement("div");
   b.className = "b";
   const h = document.createElement("div");
@@ -497,7 +501,7 @@ async function openChannel(id) {
   if (!ch) return;
   const { data, error } = await supabase
     .from("messages")
-    .select("id,channel_id,user_id,content,created_at,edited_at")
+    .select("id,channel_id,user_id,content,created_at,edited_at,reply_to")
     .eq("channel_id", id)
     .order("created_at", { ascending: false })
     .limit(100);
@@ -525,14 +529,15 @@ async function send() {
   v.value = "";
   const { data, error } = await supabase
     .from("messages")
-    .insert({ channel_id: cid, user_id: me.id, content: t })
-    .select("id,channel_id,user_id,content,created_at,edited_at")
+        .insert({ channel_id: cid, user_id: me.id, content: t, reply_to: (window.rallyReply && window.rallyReply.id) || null })
+    .select("id,channel_id,user_id,content,created_at,edited_at,reply_to")
     .single();
   sending = false;
   const ch = channels.find((c) => c.id === cid);
   v.placeholder = ch ? "Message #" + ch.name : "Message";
   if (error) { v.value = t; return toast(error.message.includes("Slow down") ? "You are sending messages too fast. Wait a moment." : "Message not sent. Try again."); }
-  addMsg(data, true);
+    addMsg(data, true);
+  document.dispatchEvent(new Event("rally-reply-sent"));
 }
 
 let gmode = "create";
