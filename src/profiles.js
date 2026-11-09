@@ -3,7 +3,9 @@ import { supabase } from "./supabase.js";
 const $ = (id) => document.getElementById(id);
 const COLS = ["#ffb547", "#ff5c8a", "#7fd6ff", "#b69cff", "#8be28b", "#ff8a5c", "#5c7cff", "#2dd4bf"];
 const STYLES = [["normal", "Normal"], ["glow", "Glow"], ["gradient", "Gradient"], ["mono", "Mono"], ["serif", "Serif"]];
-const COLS_SEL = "id,username,color,bio,status,pronouns,banner,name_style,created_at";
+const COLS_SEL = "id,username,color,bio,status,pronouns,banner,name_style,created_at,avatar_url,banner_url";
+export const MAX_IMG = 1048576;
+const OK_TYPES = { "image/png": "png", "image/jpeg": "jpg", "image/webp": "webp", "image/gif": "gif" };
 const P = {};
 let uid = null;
 
@@ -36,7 +38,10 @@ css.textContent = `
 .psw button.on{border-color:var(--text)}
 .pst{display:flex;gap:6px;flex-wrap:wrap;margin:6px 0}
 .pst button{padding:6px 12px;border-radius:999px;background:var(--raised);color:var(--text);font-weight:600}
-.pst button.on{background:var(--accent);color:var(--on-accent)}`;
+.pst button.on{background:var(--accent);color:var(--on-accent)}
+.pimg{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:4px 0 8px}
+.pimg input[type=file]{flex:1;min-width:0;margin:0;font-size:13px}
+.pimg button{padding:6px 12px;border-radius:8px;background:var(--raised);color:var(--text);font-weight:600;font-size:13px}`;
 document.head.append(css);
 
 document.body.insertAdjacentHTML("beforeend", `<div class="ov" id="pov" style="z-index:48"><div class="dlg pcard" id="pcard" role="dialog" aria-modal="true" aria-label="Profile"></div></div>`);
@@ -82,6 +87,36 @@ function setStyle(el, style) {
   if (style && style !== "normal") el.classList.add("ns-" + style);
 }
 
+export async function uploadImage(kind, file, folder) {
+  if (!OK_TYPES[file.type]) throw new Error("Use a PNG, JPG, WEBP, or GIF image.");
+  if (file.size > MAX_IMG) throw new Error("That image is bigger than 1 MB.");
+  const path = folder + "/" + kind + "-" + Date.now() + "." + OK_TYPES[file.type];
+  const { error } = await supabase.storage.from("images").upload(path, file, { contentType: file.type, cacheControl: "31536000" });
+  if (error) throw new Error(/size|exceed/i.test(error.message) ? "That image is bigger than 1 MB." : "Could not upload that image.");
+  return supabase.storage.from("images").getPublicUrl(path).data.publicUrl;
+}
+export async function removeByUrl(url) {
+  if (!url) return;
+  const i = url.indexOf("/object/public/images/");
+  if (i < 0) return;
+  try { await supabase.storage.from("images").remove([decodeURIComponent(url.slice(i + 22))]); } catch (e) { /* ignore */ }
+}
+function fillAv(el, p) {
+  if (!el) return;
+  if (p && p.avatar_url) {
+    el.style.backgroundImage = 'url("' + p.avatar_url + '")';
+    el.style.backgroundSize = "cover";
+    el.style.backgroundPosition = "center";
+    el.style.color = "transparent";
+  } else {
+    el.style.backgroundImage = "";
+    el.style.color = "";
+  }
+}
+function setBanner(el, url, color) {
+  el.style.background = url ? 'center / cover no-repeat url("' + url + '")' : "linear-gradient(135deg," + (color || "#ffb547") + ",#12142a)";
+}
+
 supabase.auth.getSession().then(({ data }) => { uid = data.session ? data.session.user.id : null; });
 supabase.auth.onAuthStateChange((_e, s) => { uid = s && s.user ? s.user.id : null; });
 
@@ -101,8 +136,21 @@ function applyNames(root) {
     const p = P[m.dataset.user];
     const n = m.querySelector(".n");
     if (p && n) setStyle(n, p.name_style);
+    if (p) fillAv(m.querySelector(".av"), p);
   });
 }
+new MutationObserver(async () => {
+  const rows = [...$("memlist").querySelectorAll(":scope > div[data-user]")];
+  await loadProfiles(rows.map((r) => r.dataset.user));
+  rows.forEach((r) => fillAv(r.querySelector(".av"), P[r.dataset.user]));
+}).observe($("memlist"), { childList: true });
+function paintOwn() {
+  const el = document.querySelector(".me .av");
+  const p = uid && P[uid];
+  if (el && p && p.avatar_url && !el.style.backgroundImage) fillAv(el, p);
+  if (el && p && !p.avatar_url && el.style.backgroundImage) fillAv(el, p);
+}
+setInterval(async () => { if (uid) { await loadProfiles([uid]); paintOwn(); } }, 2000);
 new MutationObserver(async (muts) => {
   const els = [];
   muts.forEach((mu) => mu.addedNodes.forEach((n) => {
@@ -121,10 +169,11 @@ function header(p) {
   const c = $("pcard");
   c.textContent = "";
   const b = h("div", "pbanner");
-  b.style.background = "linear-gradient(135deg," + (p.banner || "#ffb547") + ",#12142a)";
+  setBanner(b, p.banner_url, p.banner);
   const body = h("div", "pbody");
   const av = h("div", "pav", (p.username || "?")[0].toUpperCase());
   av.style.background = p.color || "#ffb547";
+  fillAv(av, p);
   c.append(b, body);
   body.append(av);
   return body;
@@ -174,6 +223,31 @@ function edit(p) {
   body.classList.add("pf");
   let banner = p.banner || "#ffb547";
   let style = p.name_style || "normal";
+  let avFile = null, bnFile = null, avClear = false, bnClear = false;
+  const picker = (label, onPick, onClear) => {
+    body.append(h("div", "psec", label));
+    const row = h("div", "pimg");
+    const f = h("input");
+    f.type = "file";
+    f.accept = "image/png,image/jpeg,image/webp,image/gif";
+    f.onchange = () => {
+      const file = f.files[0];
+      if (!file) return;
+      if (file.size > MAX_IMG) { f.value = ""; return toast("That image is bigger than 1 MB."); }
+      if (!OK_TYPES[file.type]) { f.value = ""; return toast("Use a PNG, JPG, WEBP, or GIF image."); }
+      onPick(file);
+    };
+    const r = h("button", "", "Remove");
+    r.onclick = () => { f.value = ""; onClear(); };
+    row.append(f, r);
+    body.append(row, h("small", "", "PNG, JPG, WEBP, or GIF. Up to 1 MB."));
+  };
+  picker("Profile picture",
+    (file) => { avFile = file; avClear = false; fillAv($("pcard").querySelector(".pav"), { avatar_url: URL.createObjectURL(file) }); },
+    () => { avFile = null; avClear = true; fillAv($("pcard").querySelector(".pav"), null); });
+  picker("Profile banner image",
+    (file) => { bnFile = file; bnClear = false; setBanner($("pcard").querySelector(".pbanner"), URL.createObjectURL(file), banner); },
+    () => { bnFile = null; bnClear = true; setBanner($("pcard").querySelector(".pbanner"), null, banner); });
   body.append(h("div", "psec", "Status"));
   const st = h("input");
   st.maxLength = 60;
@@ -206,7 +280,7 @@ function edit(p) {
     b.onclick = () => {
       banner = c;
       sw.querySelectorAll("button").forEach((x) => x.classList.toggle("on", x === b));
-      $("pcard").querySelector(".pbanner").style.background = "linear-gradient(135deg," + c + ",#12142a)";
+      if (!bnFile && (bnClear || !p.banner_url)) setBanner($("pcard").querySelector(".pbanner"), null, c);
     };
     sw.append(b);
   });
@@ -229,15 +303,29 @@ function edit(p) {
   const save = h("button", "pbtn", "Save profile");
   save.onclick = async () => {
     save.disabled = true;
+    let avatar_url = p.avatar_url || null, banner_url = p.banner_url || null;
+    const oldAv = avatar_url, oldBn = banner_url;
+    try {
+      if (avClear) avatar_url = null;
+      if (bnClear) banner_url = null;
+      if (avFile) avatar_url = await uploadImage("avatar", avFile, "users/" + uid);
+      if (bnFile) banner_url = await uploadImage("banner", bnFile, "users/" + uid);
+    } catch (err) {
+      save.disabled = false;
+      return toast(err.message);
+    }
     const { data, error } = await supabase
       .from("profiles")
-      .update({ status: st.value.trim() || null, pronouns: pr.value.trim() || null, bio: bio.value.trim() || null, banner, name_style: style })
+      .update({ status: st.value.trim() || null, pronouns: pr.value.trim() || null, bio: bio.value.trim() || null, banner, name_style: style, avatar_url, banner_url })
       .eq("id", uid)
       .select(COLS_SEL)
       .single();
     save.disabled = false;
     if (error || !data) return toast("Could not save your profile. Is the profile SQL run?");
     P[uid] = data;
+    if (oldAv && oldAv !== data.avatar_url) removeByUrl(oldAv);
+    if (oldBn && oldBn !== data.banner_url) removeByUrl(oldBn);
+    paintOwn();
     document.querySelectorAll('.m[data-user="' + uid + '"]').forEach(applyNames);
     toast("Profile saved.");
     view(data);

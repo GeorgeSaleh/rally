@@ -109,6 +109,7 @@ function drawRail() {
     b.className = "grp";
     b.textContent = g.name[0].toUpperCase();
     b.title = g.name;
+        b.dataset.gid = g.id;
     b.setAttribute("aria-label", g.name);
     b.setAttribute("aria-current", g.id === gid);
     b.onclick = () => openGroup(g.id);
