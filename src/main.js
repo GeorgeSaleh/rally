@@ -11,6 +11,7 @@ import "./call.js";
 import "./polish.js";
 import "./profiles.js";
 import "./directory.js";
+import "./friends.js";
 import "./notifications.js";
 import "./reactions.js";
 import { supabase } from "./supabase.js";

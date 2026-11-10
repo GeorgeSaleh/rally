@@ -37,6 +37,7 @@ function beep() {
 }
 function away() { return document.hidden || !document.hasFocus(); }
 function notify(text) {
+    if (window.rallyDnd) return;
   if (away()) {
     missed++;
     document.title = "(" + missed + ") " + baseTitle;

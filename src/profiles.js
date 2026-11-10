@@ -2,8 +2,11 @@ import { supabase } from "./supabase.js";
 
 const $ = (id) => document.getElementById(id);
 const COLS = ["#ffb547", "#ff5c8a", "#7fd6ff", "#b69cff", "#8be28b", "#ff8a5c", "#5c7cff", "#2dd4bf"];
-const STYLES = [["normal", "Normal"], ["glow", "Glow"], ["gradient", "Gradient"], ["mono", "Mono"], ["serif", "Serif"]];
-const COLS_SEL = "id,username,color,bio,status,pronouns,banner,name_style,created_at,avatar_url,banner_url";
+const STYLES = [["normal", "Normal"], ["glow", "Glow"], ["gradient", "Gradient"], ["rainbow", "Rainbow"]];
+const NAME_COLS = ["#ffb547", "#ff5c8a", "#7fd6ff", "#b69cff", "#8be28b", "#ff8a5c", "#5c7cff", "#2dd4bf", "#f472b6", "#fde047"];
+const PRES = [["online", "🟢 Online"], ["idle", "🌙 Idle"], ["dnd", "⛔ Do not disturb"], ["invisible", "👻 Invisible"]];
+const QUICK = ["😀", "😎", "🎮", "📚", "🎵", "😴", "🔥", "❤️", "🍕", "✨"];
+const COLS_SEL = "id,username,color,bio,status,pronouns,banner,name_style,created_at,avatar_url,banner_url,name_color,interests,presence,last_seen";
 export const MAX_IMG = 1048576;
 const OK_TYPES = { "image/png": "png", "image/jpeg": "jpg", "image/webp": "webp", "image/gif": "gif" };
 const P = {};
@@ -13,8 +16,19 @@ const css = document.createElement("style");
 css.textContent = `
 .ns-glow{text-shadow:0 0 10px currentColor}
 .ns-gradient{background:linear-gradient(90deg,#ffb547,#ff5c8a);-webkit-background-clip:text;background-clip:text;color:transparent!important}
-.ns-mono{font-family:ui-monospace,Menlo,Consolas,monospace}
-.ns-serif{font-family:Georgia,"Times New Roman",serif;font-style:italic}
+.ns-rainbow{background:linear-gradient(90deg,#ff5c8a,#ffb547,#8be28b,#7fd6ff,#b69cff,#ff5c8a);background-size:200% auto;-webkit-background-clip:text;background-clip:text;color:transparent!important;animation:rbow 4s linear infinite}
+@keyframes rbow{to{background-position:200% center}}
+@media (prefers-reduced-motion:reduce){.ns-rainbow{animation:none}}
+.pdot{position:absolute;right:-3px;bottom:-3px;width:12px;height:12px;border-radius:50%;border:2px solid var(--panel);box-sizing:border-box}
+.pdot.on{background:#3ddc84}.pdot.idle{background:#ffc247}.pdot.dnd{background:#ff4d6d}.pdot.off{background:#6b7080}
+.pav .pdot{width:18px;height:18px;border-width:3px;right:0;bottom:0}
+.pchips{display:flex;flex-wrap:wrap;gap:6px;margin-top:4px}
+.pchip{padding:4px 10px;border-radius:999px;background:var(--raised);font-size:13px}
+.ppres,.pemo{display:flex;gap:6px;flex-wrap:wrap;margin:6px 0}
+.ppres button{padding:6px 12px;border-radius:999px;background:var(--raised);color:var(--text);font-weight:600;font-size:13px}
+.ppres button.on{background:var(--accent);color:var(--on-accent)}
+.pemo button{font-size:18px;padding:2px 6px;border-radius:8px;background:var(--raised)}
+.psw button.none{width:auto;border-radius:999px;padding:0 12px;font-size:12px;background:var(--raised);color:var(--text);font-weight:600}
 .m .av,.m .n,#memlist > div[data-user],.me .av{cursor:pointer}
 .pcard{padding:0!important;overflow:hidden;max-width:430px;width:100%;max-height:92%;overflow-y:auto}
 .pbanner{height:86px}
@@ -82,9 +96,28 @@ function fmt(el, text) {
     el.append(n || part);
   });
 }
-function setStyle(el, style) {
-  el.classList.remove("ns-glow", "ns-gradient", "ns-mono", "ns-serif");
-  if (style && style !== "normal") el.classList.add("ns-" + style);
+function setStyle(el, style, color) {
+  el.classList.remove("ns-glow", "ns-gradient", "ns-rainbow", "ns-mono", "ns-serif");
+  if (style && style !== "normal" && STYLES.some((x) => x[0] === style)) el.classList.add("ns-" + style);
+  el.style.color = style === "gradient" || style === "rainbow" ? "" : color || "";
+}
+function dotState(p) {
+  if (!p || p.presence === "invisible") return "off";
+  if (p.presence === "dnd") return "dnd";
+  if (p.presence === "idle") return "idle";
+  const t = p.last_seen ? new Date(p.last_seen).getTime() : 0;
+  return Date.now() - t < 180000 ? "on" : "off";
+}
+function paintDot(el, p) {
+  if (!el) return;
+  const old = el.querySelector(":scope > .pdot");
+  if (old) old.remove();
+  const st = dotState(p);
+  if (!st) return;
+  el.style.position = "relative";
+  const d = document.createElement("i");
+  d.className = "pdot " + st;
+  el.append(d);
 }
 
 export async function uploadImage(kind, file, folder) {
@@ -135,22 +168,48 @@ function applyNames(root) {
   list.forEach((m) => {
     const p = P[m.dataset.user];
     const n = m.querySelector(".n");
-    if (p && n) setStyle(n, p.name_style);
+    if (p && n) setStyle(n, p.name_style, p.name_color);
     if (p) fillAv(m.querySelector(".av"), p);
   });
 }
 new MutationObserver(async () => {
   const rows = [...$("memlist").querySelectorAll(":scope > div[data-user]")];
   await loadProfiles(rows.map((r) => r.dataset.user));
-  rows.forEach((r) => fillAv(r.querySelector(".av"), P[r.dataset.user]));
+  rows.forEach((r) => {
+    const av = r.querySelector(".av");
+    fillAv(av, P[r.dataset.user]);
+    paintDot(av, P[r.dataset.user]);
+  });
 }).observe($("memlist"), { childList: true });
+function repaintMembers() {
+  [...$("memlist").querySelectorAll(":scope > div[data-user]")].forEach((r) => paintDot(r.querySelector(".av"), P[r.dataset.user]));
+}
 function paintOwn() {
   const el = document.querySelector(".me .av");
   const p = uid && P[uid];
+  window.rallyDnd = !!(p && p.presence === "dnd");
   if (el && p && p.avatar_url && !el.style.backgroundImage) fillAv(el, p);
   if (el && p && !p.avatar_url && el.style.backgroundImage) fillAv(el, p);
+  if (el && p) paintDot(el, p);
 }
 setInterval(async () => { if (uid) { await loadProfiles([uid]); paintOwn(); } }, 2000);
+async function touch() {
+  if (!uid || document.hidden) return;
+  await supabase.rpc("touch_seen");
+  if (P[uid]) P[uid].last_seen = new Date().toISOString();
+  paintOwn();
+}
+setInterval(touch, 60000);
+setTimeout(touch, 3000);
+async function refreshPresence() {
+  if (!uid) return;
+  const ids = [uid, ...[...$("memlist").querySelectorAll(":scope > div[data-user]")].map((r) => r.dataset.user)];
+  const { data } = await supabase.from("profiles").select("id,presence,last_seen").in("id", [...new Set(ids)]);
+  (data || []).forEach((r) => { if (P[r.id]) Object.assign(P[r.id], r); });
+  repaintMembers();
+  paintOwn();
+}
+setInterval(refreshPresence, 45000);
 new MutationObserver(async (muts) => {
   const els = [];
   muts.forEach((mu) => mu.addedNodes.forEach((n) => {
@@ -174,6 +233,7 @@ function header(p) {
   const av = h("div", "pav", (p.username || "?")[0].toUpperCase());
   av.style.background = p.color || "#ffb547";
   fillAv(av, p);
+  paintDot(av, p);
   c.append(b, body);
   body.append(av);
   return body;
@@ -187,13 +247,19 @@ async function openCard(id) {
 function view(p) {
   const body = header(p);
   const name = h("div", "pname", p.username);
-  setStyle(name, p.name_style);
+  setStyle(name, p.name_style, p.name_color);
   body.append(name);
   const meta = [];
   if (p.pronouns) meta.push(p.pronouns);
   if (p.created_at) meta.push("Joined " + new Date(p.created_at).toLocaleDateString([], { month: "long", year: "numeric" }));
   if (meta.length) body.append(h("div", "pmeta", meta.join(" · ")));
   if (p.status) body.append(h("div", "pstatus", p.status));
+  if (p.interests) {
+    body.append(h("div", "psec", "Interests"));
+    const chips = h("div", "pchips");
+    p.interests.split(",").map((x) => x.trim()).filter(Boolean).forEach((x) => chips.append(h("span", "pchip", x)));
+    body.append(chips);
+  }
   if (p.bio) {
     body.append(h("div", "psec", "About me"));
     const bio = h("div", "pbio");
@@ -218,12 +284,41 @@ function view(p) {
   row.append(x);
   body.append(row);
 }
+function swatches(list, current, onPick, noneLabel) {
+  const sw = h("div", "psw");
+  const all = [];
+  const mark = (v) => all.forEach(([b, val]) => b.classList.toggle("on", val === v));
+  if (noneLabel) {
+    const n = h("button", "none", noneLabel);
+    n.onclick = () => { onPick(null); mark(null); };
+    all.push([n, null]);
+    sw.append(n);
+  }
+  list.forEach((c) => {
+    const b = h("button");
+    b.style.background = c;
+    b.setAttribute("aria-label", "Color " + c);
+    b.onclick = () => { onPick(c); mark(c); };
+    all.push([b, c]);
+    sw.append(b);
+  });
+  mark(current);
+  return sw;
+}
 function edit(p) {
   const body = header(p);
   body.classList.add("pf");
   let banner = p.banner || "#ffb547";
-  let style = p.name_style || "normal";
+  let style = STYLES.some((x) => x[0] === p.name_style) ? p.name_style : "normal";
+  let ncolor = p.name_color || null;
+  let acolor = p.color || "#ffb547";
+  let pres = p.presence || "online";
   let avFile = null, bnFile = null, avClear = false, bnClear = false;
+  const nm = h("div", "pname", p.username);
+  const prev = () => setStyle(nm, style, ncolor);
+  prev();
+  const hasAv = () => !!(avFile || (p.avatar_url && !avClear));
+  const hasBn = () => !!(bnFile || (p.banner_url && !bnClear));
   const picker = (label, onPick, onClear) => {
     body.append(h("div", "psec", label));
     const row = h("div", "pimg");
@@ -248,18 +343,29 @@ function edit(p) {
   picker("Profile banner image",
     (file) => { bnFile = file; bnClear = false; setBanner($("pcard").querySelector(".pbanner"), URL.createObjectURL(file), banner); },
     () => { bnFile = null; bnClear = true; setBanner($("pcard").querySelector(".pbanner"), null, banner); });
+
+  body.append(h("div", "psec", "Online status"));
+  const prow = h("div", "ppres");
+  PRES.forEach(([k, label]) => {
+    const b = h("button", k === pres ? "on" : "", label);
+    b.onclick = () => { pres = k; prow.querySelectorAll("button").forEach((x) => x.classList.toggle("on", x === b)); };
+    prow.append(b);
+  });
+  body.append(prow, h("small", "", "Do not disturb silences Rally notifications. Invisible shows you as offline (grey dot)."));
+
   body.append(h("div", "psec", "Status"));
   const st = h("input");
   st.maxLength = 60;
-  st.placeholder = "😀 What are you up to?";
+  st.placeholder = "What are you up to?";
   st.value = p.status || "";
-  body.append(st);
-  body.append(h("div", "psec", "Pronouns"));
-  const pr = h("input");
-  pr.maxLength = 20;
-  pr.placeholder = "for example: she/her";
-  pr.value = p.pronouns || "";
-  body.append(pr);
+  const emo = h("div", "pemo");
+  QUICK.forEach((e) => {
+    const b = h("button", "", e);
+    b.onclick = () => { if (!st.value.startsWith(e)) st.value = (e + " " + st.value).slice(0, 60); st.focus(); };
+    emo.append(b);
+  });
+  body.append(st, emo);
+
   body.append(h("div", "psec", "About me"));
   const bio = h("textarea");
   bio.maxLength = 300;
@@ -270,35 +376,48 @@ function edit(p) {
   bio.oninput = upd;
   upd();
   body.append(bio, cnt);
+
+  body.append(h("div", "psec", "Interests"));
+  const it = h("input");
+  it.maxLength = 100;
+  it.placeholder = "gaming, music, soccer (up to 5, separated by commas)";
+  it.value = p.interests || "";
+  body.append(it);
+
+  body.append(h("div", "psec", "Pronouns"));
+  const pr = h("input");
+  pr.maxLength = 20;
+  pr.placeholder = "for example: she/her";
+  pr.value = p.pronouns || "";
+  body.append(pr);
+
   body.append(h("div", "psec", "Banner color"));
-  const sw = h("div", "psw");
-  COLS.forEach((c) => {
-    const b = h("button");
-    b.style.background = c;
-    b.setAttribute("aria-label", "Banner " + c);
-    if (c === banner) b.className = "on";
-    b.onclick = () => {
-      banner = c;
-      sw.querySelectorAll("button").forEach((x) => x.classList.toggle("on", x === b));
-      if (!bnFile && (bnClear || !p.banner_url)) setBanner($("pcard").querySelector(".pbanner"), null, c);
-    };
-    sw.append(b);
-  });
-  body.append(sw);
+  body.append(swatches(COLS, banner, (c) => {
+    banner = c;
+    if (!hasBn()) setBanner($("pcard").querySelector(".pbanner"), null, c);
+  }));
+  body.append(h("div", "psec", "Avatar color"));
+  body.append(swatches(COLS, acolor, (c) => {
+    acolor = c;
+    if (!hasAv()) $("pcard").querySelector(".pav").style.backgroundColor = c;
+  }));
+  body.append(h("small", "", "Shown when you have no profile picture. Other places update after a refresh."));
+
+  body.append(h("div", "psec", "Name color"));
+  body.append(swatches(NAME_COLS, ncolor, (c) => { ncolor = c; prev(); }, "Default"));
   body.append(h("div", "psec", "Name style"));
-  const nm = h("div", "pname", p.username);
-  setStyle(nm, style);
   const pills = h("div", "pst");
   STYLES.forEach(([k, label]) => {
     const b = h("button", k === style ? "on" : "", label);
     b.onclick = () => {
       style = k;
       pills.querySelectorAll("button").forEach((x) => x.classList.toggle("on", x === b));
-      setStyle(nm, k);
+      prev();
     };
     pills.append(b);
   });
   body.append(pills, nm);
+
   const row = h("div", "prow");
   const save = h("button", "pbtn", "Save profile");
   save.onclick = async () => {
@@ -314,9 +433,17 @@ function edit(p) {
       save.disabled = false;
       return toast(err.message);
     }
+    const interests = it.value.split(",").map((x) => x.trim().slice(0, 20)).filter(Boolean).slice(0, 5).join(", ");
     const { data, error } = await supabase
       .from("profiles")
-      .update({ status: st.value.trim() || null, pronouns: pr.value.trim() || null, bio: bio.value.trim() || null, banner, name_style: style, avatar_url, banner_url })
+      .update({
+        status: st.value.trim() || null,
+        pronouns: pr.value.trim() || null,
+        bio: bio.value.trim() || null,
+        interests: interests || null,
+        banner, color: acolor, name_color: ncolor, name_style: style, presence: pres,
+        avatar_url, banner_url,
+      })
       .eq("id", uid)
       .select(COLS_SEL)
       .single();
@@ -326,6 +453,7 @@ function edit(p) {
     if (oldAv && oldAv !== data.avatar_url) removeByUrl(oldAv);
     if (oldBn && oldBn !== data.banner_url) removeByUrl(oldBn);
     paintOwn();
+    repaintMembers();
     document.querySelectorAll('.m[data-user="' + uid + '"]').forEach(applyNames);
     toast("Profile saved.");
     view(data);

@@ -320,6 +320,7 @@ function subscribe() {
             if (m.content === "📞 Started a call" && m.sender !== me) {
         document.dispatchEvent(new CustomEvent("rally-call-invite", { detail: { thread: m.thread_id, from: m.sender } }));
       }
+    
       await loadNames([m.sender]);
       if (!threads.some((t) => t.id === m.thread_id)) await loadThreads();
       if (m.thread_id === current && $("dmov").classList.contains("on")) {
@@ -352,4 +353,10 @@ supabase.auth.onAuthStateChange((_e, s) => { setTimeout(() => init(s && s.user),
 supabase.auth.getSession().then(({ data }) => init(data.session && data.session.user));
 document.addEventListener("keydown", (e) => {
   if (e.key === "Escape") { $("dmrepov").classList.remove("on"); closeOverlay(); }
+});
+document.addEventListener("rally-open-dm", async (e) => {
+  await loadBlocks();
+  await loadThreads();
+  $("dmov").classList.add("on");
+  openThread(e.detail.thread);
 });
