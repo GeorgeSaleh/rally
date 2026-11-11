@@ -31,6 +31,7 @@ document.head.append(css);
 document.body.insertAdjacentHTML("beforeend", `
 <div class="ov" id="dirov" style="z-index:46"><div class="dlg" role="dialog" aria-modal="true" aria-labelledby="dirt" style="max-width:920px;max-height:92%;overflow-y:auto">
   <h2 id="dirt">Discover servers</h2>
+    <div class="dirstats" id="dirstats"></div>
   <p class="dirwarn">Public servers are open to everyone on Rally. Only join servers you trust. Private messages only work between people who share a private server.</p>
   <div class="dirgrid" id="dirlist"></div>
   <div class="row"><button class="cancel" id="dirclose">Close</button></div>
@@ -46,8 +47,28 @@ function toast(t) {
 }
 supabase.auth.getSession().then(({ data }) => { uid = data.session ? data.session.user.id : null; });
 supabase.auth.onAuthStateChange((_e, s) => { uid = s && s.user ? s.user.id : null; });
-
-function openDir() { $("dirov").classList.add("on"); load(); }
+const sst = document.createElement("style");
+sst.textContent = `.dirstats{display:flex;gap:18px;flex-wrap:wrap;margin:0 0 12px;padding:10px 14px;border-radius:12px;background:var(--raised);font-size:14px}.dirstats b{font-weight:800}.dirstats .live{color:#3ddc84}`;
+document.head.append(sst);
+async function loadStats() {
+  const el = $("dirstats");
+  const { data, error } = await supabase.rpc("rally_stats");
+  el.textContent = "";
+  if (error || !data || !data.length) return;
+  const a = document.createElement("span");
+  a.append("👥 ");
+  const ab = document.createElement("b");
+  ab.textContent = String(data[0].total_users);
+  a.append(ab, " people on Rally");
+  const o = document.createElement("span");
+  o.className = "live";
+  o.append("🟢 ");
+  const ob = document.createElement("b");
+  ob.textContent = String(data[0].online_users);
+  o.append(ob, " online now");
+  el.append(a, o);
+}
+function openDir() { $("dirov").classList.add("on"); load(); loadStats(); }
 $("dirclose").onclick = () => $("dirov").classList.remove("on");
 $("dirov").onclick = (e) => { if (e.target === $("dirov")) $("dirov").classList.remove("on"); };
 document.addEventListener("keydown", (e) => { if (e.key === "Escape") $("dirov").classList.remove("on"); });

@@ -9,6 +9,7 @@ import "./groupsettings.js";
 import "./replies.js";
 import "./call.js";
 import "./polish.js";
+import "./media.js";
 import "./profiles.js";
 import "./directory.js";
 import "./friends.js";
