@@ -6,8 +6,43 @@
 <title>Rally</title>
 <link rel="icon" type="image/svg+xml" href="/favicon.svg?v=2">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@600;800&family=Instrument+Sans:wght@400;500;600&display=swap">
+<style>
+  #rally-loading-screen {
+    position: fixed;
+    inset: 0;
+    z-index: 99999;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 18px;
+    background: #14141a;
+    transition: opacity 0.3s ease;
+  }
+  #rally-loading-screen.rally-fade-out {
+    opacity: 0;
+    pointer-events: none;
+  }
+  #rally-loading-screen img {
+    width: 96px;
+    height: 96px;
+    animation: rally-spin 1.2s linear infinite;
+  }
+  #rally-loading-screen .rally-title {
+    font: 800 32px 'Bricolage Grotesque', sans-serif;
+    letter-spacing: 6px;
+    color: #ffb547;
+  }
+  @keyframes rally-spin {
+    to { transform: rotate(360deg); }
+  }
+</style>
 </head>
 <body>
+<div id="rally-loading-screen">
+  <img src="/favicon.svg" alt="Rally is loading">
+  <div class="rally-title">RALLY</div>
+</div>
 <div class="app" id="app">
   <div class="left">
     <nav class="rail" id="rail" aria-label="Groups"></nav>
@@ -43,6 +78,23 @@
 <div class="row"><button class="cancel" id="rcancel">Cancel</button><button class="go" id="rgo" disabled>Send report</button></div>
 </div></div>
 <div class="toast" id="toast" role="status"></div>
+
+<script>
+  // Loading screen: shows for a moment, then fades out into the app.
+  (function () {
+    var done = false;
+    function hide() {
+      if (done) return;
+      done = true;
+      var s = document.getElementById('rally-loading-screen');
+      if (!s) return;
+      s.classList.add('rally-fade-out');
+      setTimeout(function () { s.remove(); }, 300);
+    }
+    window.addEventListener('load', function () { setTimeout(hide, 600); });
+    setTimeout(hide, 2500);
+  })();
+</script>
 <script type="module" src="/src/main.js"></script>
 </body>
 </html>
