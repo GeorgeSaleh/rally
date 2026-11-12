@@ -13,6 +13,7 @@ import "./media.js";
 import "./loading-screen.js";
 import "./search.js";
 import "./pins.js";
+import "./badges.js";
 import "./profiles.js";
 import "./directory.js";
 import "./friends.js";
