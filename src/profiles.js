@@ -21,7 +21,8 @@ const BADGE_INFO = {
 const PRES = [["online", "🟢 Online"], ["idle", "🌙 Idle"], ["dnd", "⛔ Do not disturb"], ["invisible", "👻 Invisible"]];
 const QUICK = ["😀", "😎", "🎮", "📚", "🎵", "😴", "🔥", "❤️", "🍕", "✨"];
 const COLS_SEL = "id,username,color,bio,status,pronouns,banner,name_style,created_at,avatar_url,banner_url,name_color,name_font,interests,presence,last_seen";
-export const MAX_IMG = 1048576;
+export const MAX_IMG = 3145728;
+const MAX_TXT = "3 MB";
 const OK_TYPES = { "image/png": "png", "image/jpeg": "jpg", "image/webp": "webp", "image/gif": "gif" };
 const P = {};
 let uid = null;
@@ -120,14 +121,12 @@ function fmt(el, text) {
     el.append(n || part);
   });
 }
-// Style + color + font for any name
 function setStyle(el, style, color, font) {
   el.classList.remove("ns-glow", "ns-gradient", "ns-rainbow", "ns-mono", "ns-serif");
   if (style && style !== "normal" && STYLES.some((x) => x[0] === style)) el.classList.add("ns-" + style);
   el.style.color = style === "gradient" || style === "rainbow" ? "" : color || "";
   el.style.fontFamily = font && FONTS[font] ? FONTS[font] : "";
 }
-// Turns a hue (0-360) into a hex color for the spectrum slider
 function hsl(hue, s, l) {
   s /= 100; l /= 100;
   const k = (n) => (n + hue / 30) % 12;
@@ -156,10 +155,10 @@ function paintDot(el, p) {
 
 export async function uploadImage(kind, file, folder) {
   if (!OK_TYPES[file.type]) throw new Error("Use a PNG, JPG, WEBP, or GIF image.");
-  if (file.size > MAX_IMG) throw new Error("That image is bigger than 1 MB.");
+  if (file.size > MAX_IMG) throw new Error("That image is bigger than " + MAX_TXT + ".");
   const path = folder + "/" + kind + "-" + Date.now() + "." + OK_TYPES[file.type];
   const { error } = await supabase.storage.from("images").upload(path, file, { contentType: file.type, cacheControl: "31536000" });
-  if (error) throw new Error(/size|exceed/i.test(error.message) ? "That image is bigger than 1 MB." : "Could not upload that image.");
+  if (error) throw new Error(/size|exceed/i.test(error.message) ? "That image is bigger than " + MAX_TXT + "." : "Could not upload that image: " + error.message);
   return supabase.storage.from("images").getPublicUrl(path).data.publicUrl;
 }
 export async function removeByUrl(url) {
@@ -207,7 +206,6 @@ function applyNames(root) {
   });
 }
 
-// ---- Member list names (color, style, font) ----
 function findNameNode(row) {
   const walker = document.createTreeWalker(row, NodeFilter.SHOW_TEXT);
   let n;
@@ -234,9 +232,8 @@ async function paintMemberNames() {
       node.replaceWith(span);
       span.append(node);
     }
-    // keep rainbow badges next to the name, not inside it
     const w = span.querySelector(".rbdg-wrap");
-       if (w && span.nextElementSibling !== w) span.after(w);
+    if (w && span.nextElementSibling !== w) span.after(w);
     setStyle(span, p.name_style, p.name_color, p.name_font);
   });
 }
@@ -422,14 +419,14 @@ function edit(p) {
     f.onchange = () => {
       const file = f.files[0];
       if (!file) return;
-      if (file.size > MAX_IMG) { f.value = ""; return toast("That image is bigger than 1 MB."); }
+      if (file.size > MAX_IMG) { f.value = ""; return toast("That image is " + (file.size / 1048576).toFixed(1) + " MB. The limit is " + MAX_TXT + "."); }
       if (!OK_TYPES[file.type]) { f.value = ""; return toast("Use a PNG, JPG, WEBP, or GIF image."); }
       onPick(file);
     };
     const r = h("button", "", "Remove");
     r.onclick = () => { f.value = ""; onClear(); };
     row.append(f, r);
-    body.append(row, h("small", "", "PNG, JPG, WEBP, or GIF. Up to 1 MB."));
+    body.append(row, h("small", "", "PNG, JPG, WEBP, or animated GIF. Up to " + MAX_TXT + "."));
   };
   picker("Profile picture",
     (file) => { avFile = file; avClear = false; fillAv($("pcard").querySelector(".pav"), { avatar_url: URL.createObjectURL(file) }); },
@@ -497,7 +494,6 @@ function edit(p) {
   }));
   body.append(h("small", "", "Shown when you have no profile picture. Other places update after a refresh."));
 
-  // ---- Name color: quick swatches + spectrum slider + exact picker ----
   body.append(h("div", "psec", "Name color"));
   const colorIn = h("input", "pcol");
   colorIn.type = "color";

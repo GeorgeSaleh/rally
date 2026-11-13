@@ -21,7 +21,21 @@ const css = document.createElement("style");
 css.textContent = `
 .mpop{position:fixed;z-index:52;display:none;background:var(--panel);border:1px solid var(--line);border-radius:14px;box-shadow:0 12px 40px rgba(0,0,0,.45);overflow:hidden;max-width:calc(100vw - 16px)}
 .mpop.on{display:block}
-.mpop emoji-picker{--background:var(--panel);--border-color:var(--line);--input-border-color:var(--line);--input-font-color:var(--text);--button-hover-background:var(--raised);--outline-color:var(--accent);--indicator-color:var(--accent);--category-font-color:var(--muted);--num-columns:8;width:340px;max-width:calc(100vw - 18px);height:390px}
+.mpop emoji-picker{--background:var(--panel);--border-color:var(--line);--input-border-color:var(--line);--input-font-color:var(--text);--button-hover-background:var(--raised);--outline-color:var(--accent);--indicator-color:var(--accent);--category-font-color:var(--muted);--num-columns:8;width:340px;max-width:calc(100vw - 18px);height:350px}
+.mce-tabs{display:flex;gap:6px;padding:8px 10px 4px;width:340px;max-width:calc(100vw - 18px);box-sizing:border-box}
+.mce-tabs button{flex:1;padding:7px;border-radius:9px;background:var(--raised);color:var(--muted);font-weight:700;font-size:13px}
+.mce-tabs button.on{background:var(--accent);color:var(--on-accent)}
+.mce-custom{width:340px;max-width:calc(100vw - 18px);height:350px;box-sizing:border-box;padding:6px 10px 10px;overflow-y:auto}
+.mce-custom[hidden]{display:none}
+.mce-top{display:flex;gap:6px;margin-bottom:8px}
+.mce-top input{flex:1;min-width:0;padding:8px 10px;border-radius:10px;border:1px solid var(--line);background:var(--raised);color:var(--text);font:inherit}
+.mce-top button{padding:0 12px;border-radius:10px;background:var(--accent);color:var(--on-accent);font-weight:700;font-size:13px}
+.mce-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:6px}
+.mce-item{display:flex;flex-direction:column;align-items:center;gap:3px;padding:6px 2px;border-radius:10px;background:var(--raised);color:var(--text);font-size:10px;overflow:hidden}
+.mce-item:hover{background:var(--line)}
+.mce-item img{width:36px;height:36px;object-fit:contain}
+.mce-item span{max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.mce-note{color:var(--muted);font-size:13px;padding:6px 2px;grid-column:1/-1}
 .gifpop{width:340px}
 .gifpop input{width:calc(100% - 20px);margin:10px;padding:9px 12px;border-radius:10px;border:1px solid var(--line);background:var(--raised);color:var(--text);font:inherit}
 .gifgrid{display:grid;grid-template-columns:repeat(2,1fr);gap:6px;padding:0 10px 6px;max-height:300px;overflow-y:auto}
@@ -93,12 +107,95 @@ function insertText(t) {
   inp.setSelectionRange(s + t.length, s + t.length);
 }
 
+// ================= EMOJI MENU: "Emoji" and "Custom" tabs =================
 const emojiPop = makePop("");
 const picker = document.createElement("emoji-picker");
 picker.className = document.documentElement.dataset.theme === "light" ? "light" : "dark";
 picker.addEventListener("emoji-click", (e) => insertText(e.detail.unicode));
-emojiPop.append(picker);
 
+const tabs = h("div", "mce-tabs");
+const tabEmoji = h("button", "on", "Emoji");
+tabEmoji.type = "button";
+const tabCustom = h("button", "", "Custom");
+tabCustom.type = "button";
+tabs.append(tabEmoji, tabCustom);
+
+const customBox = h("div", "mce-custom");
+customBox.hidden = true;
+const top = h("div", "mce-top");
+const csearch = h("input");
+csearch.placeholder = "Search custom emojis";
+csearch.autocomplete = "off";
+const caddBtn = h("button", "", "+ Add");
+caddBtn.type = "button";
+caddBtn.title = "Add a custom emoji to this server";
+top.append(csearch, caddBtn);
+const cgrid = h("div", "mce-grid");
+customBox.append(top, cgrid);
+
+emojiPop.append(tabs, picker, customBox);
+
+let custom = [], customGid = null, customAt = 0, customTab = false;
+
+function drawCustom() {
+  cgrid.textContent = "";
+  if (!window.rally || !window.rally.gid) {
+    cgrid.append(h("div", "mce-note", "Open a server first."));
+    return;
+  }
+  const q = csearch.value.trim().toLowerCase();
+  const list = custom.filter((e) => !q || e.name.includes(q));
+  if (!list.length) {
+    cgrid.append(h("div", "mce-note", custom.length ? "No emojis match." : "This server has no custom emojis yet. Click + Add."));
+    return;
+  }
+  list.forEach((e) => {
+    const b = h("button", "mce-item");
+    b.type = "button";
+    b.title = ":" + e.name + ":";
+    const img = h("img");
+    img.src = e.url;
+    img.alt = ":" + e.name + ":";
+    img.loading = "lazy";
+    img.draggable = false;
+    b.append(img, h("span", "", e.name));
+    b.onclick = () => {
+      insertText(":" + e.name + ": ");
+      pops.forEach((p) => p.classList.remove("on"));
+    };
+    cgrid.append(b);
+  });
+}
+async function loadCustom(force) {
+  const gid = window.rally && window.rally.gid;
+  if (!gid) { custom = []; customGid = null; drawCustom(); return; }
+  if (!force && gid === customGid && Date.now() - customAt < 30000) { drawCustom(); return; }
+  if (gid !== customGid) { custom = []; drawCustom(); }
+  const { data, error } = await supabase.from("custom_emojis").select("name,url").eq("group_id", gid).order("name");
+  if (gid !== (window.rally && window.rally.gid)) return;
+  customGid = gid;
+  customAt = Date.now();
+  custom = error ? [] : (data || []).filter((e) => /^https:\/\//.test(e.url));
+  if (error) console.error("[custom emoji tab] could not load:", error.message);
+  drawCustom();
+}
+function setTab(isCustom) {
+  customTab = isCustom;
+  tabEmoji.classList.toggle("on", !isCustom);
+  tabCustom.classList.toggle("on", isCustom);
+  picker.style.display = isCustom ? "none" : "";
+  customBox.hidden = !isCustom;
+  if (isCustom) { loadCustom(false); csearch.focus(); }
+}
+tabEmoji.onclick = () => setTab(false);
+tabCustom.onclick = () => setTab(true);
+csearch.oninput = drawCustom;
+caddBtn.onclick = () => {
+  const star = $("rce-btn");
+  if (star) star.click(); else toast("Use the ⭐ button to add emojis.");
+};
+
+// ================= GIFS =================
 const gifPop = makePop("gifpop");
 const gq = h("input");
 gq.placeholder = "Search GIFs";
@@ -189,7 +286,12 @@ document.body.append(fileIn);
 bFile.onclick = () => fileIn.click();
 fileIn.onchange = () => { const f = fileIn.files[0]; fileIn.value = ""; if (f) sendFile(f); };
 bGif.onclick = (e) => { e.stopPropagation(); openPop(gifPop, bGif); if (gifPop.classList.contains("on")) { gq.value = ""; loadGifs(""); gq.focus(); } };
-bEmo.onclick = (e) => { e.stopPropagation(); picker.className = document.documentElement.dataset.theme === "light" ? "light" : "dark"; openPop(emojiPop, bEmo); };
+bEmo.onclick = (e) => {
+  e.stopPropagation();
+  picker.className = document.documentElement.dataset.theme === "light" ? "light" : "dark";
+  openPop(emojiPop, bEmo);
+  if (emojiPop.classList.contains("on")) loadCustom(false); // preload this server's emojis
+};
 inp.addEventListener("paste", (e) => {
   const f = e.clipboardData && e.clipboardData.files && e.clipboardData.files[0];
   if (f) { e.preventDefault(); sendFile(f); }
@@ -220,38 +322,10 @@ function build(el) {
     const url = signed.get(r.att_path);
     if (!url) return;
     const card = h("div", "attfile");
-    card.append(h("span", "", "📄"));
-    const info = h("div");
-    info.append(h("b", "", r.att_name || "file"), h("small", "", r.att_size ? size(r.att_size) : ""));
-    const a = h("a", "", "Download");
-    a.href = url;
-    a.target = "_blank";
-    a.rel = "noopener noreferrer";
-    a.download = r.att_name || "file";
-    card.append(info, a);
+    const name = h("span", "attname", r.att_name || "file");
+    const sizeEl = h("span", "attsize", size(r.att_size));
+    card.append(name, sizeEl);
     wrap.append(card);
   }
-  const mt = el.querySelector(".mt");
-  if (mt) mt.after(wrap);
+  el.append(wrap);
 }
-async function decorate(els) {
-  const need = els.map((e) => e.dataset.id).filter((i) => !attCache.has(i));
-  if (need.length) {
-    const { data } = await supabase.from("messages").select("id,att_kind,att_path,att_url,att_name,att_size").in("id", need);
-    need.forEach((i) => attCache.set(i, null));
-    (data || []).forEach((r) => { if (r.att_kind) attCache.set(String(r.id), r); });
-  }
-  const paths = els.map((e) => attCache.get(e.dataset.id)).filter((r) => r && r.att_path && !signed.has(r.att_path)).map((r) => r.att_path);
-  if (paths.length) {
-    const { data } = await supabase.storage.from("attachments").createSignedUrls(paths, 3600);
-    (data || []).forEach((s) => { if (s.signedUrl) signed.set(s.path, s.signedUrl); });
-  }
-  els.forEach(build);
-}
-new MutationObserver((muts) => {
-  const els = [];
-  muts.forEach((mu) => mu.addedNodes.forEach((n) => {
-    if (n.nodeType === 1 && n.classList.contains("m") && n.dataset.id) els.push(n);
-  }));
-  if (els.length) decorate(els);
-}).observe(msgs, { childList: true });
