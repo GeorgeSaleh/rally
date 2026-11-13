@@ -4,13 +4,32 @@ const $ = (id) => document.getElementById(id);
 const COLS = ["#ffb547", "#ff5c8a", "#7fd6ff", "#b69cff", "#8be28b", "#ff8a5c", "#5c7cff", "#2dd4bf"];
 const STYLES = [["normal", "Normal"], ["glow", "Glow"], ["gradient", "Gradient"], ["rainbow", "Rainbow"]];
 const NAME_COLS = ["#ffb547", "#ff5c8a", "#7fd6ff", "#b69cff", "#8be28b", "#ff8a5c", "#5c7cff", "#2dd4bf", "#f472b6", "#fde047"];
+const FONTS = {
+  serif: '"Playfair Display", Georgia, serif',
+  mono: '"JetBrains Mono", monospace',
+  script: '"Caveat", cursive',
+  rounded: '"Nunito", sans-serif',
+  display: '"Lobster", cursive',
+};
+const FONT_NAMES = [["", "Default"], ["serif", "Serif"], ["mono", "Typewriter"], ["script", "Handwriting"], ["rounded", "Rounded"], ["display", "Fancy"]];
+const BADGE_ORDER = ["og", "developer", "tester"];
+const BADGE_INFO = {
+  og: ["OG", "OG: one of the first people on Rally"],
+  developer: ["DEV", "Developer: helps build Rally"],
+  tester: ["TESTER", "Tester: helped test Rally"],
+};
 const PRES = [["online", "🟢 Online"], ["idle", "🌙 Idle"], ["dnd", "⛔ Do not disturb"], ["invisible", "👻 Invisible"]];
 const QUICK = ["😀", "😎", "🎮", "📚", "🎵", "😴", "🔥", "❤️", "🍕", "✨"];
-const COLS_SEL = "id,username,color,bio,status,pronouns,banner,name_style,created_at,avatar_url,banner_url,name_color,interests,presence,last_seen";
+const COLS_SEL = "id,username,color,bio,status,pronouns,banner,name_style,created_at,avatar_url,banner_url,name_color,name_font,interests,presence,last_seen";
 export const MAX_IMG = 1048576;
 const OK_TYPES = { "image/png": "png", "image/jpeg": "jpg", "image/webp": "webp", "image/gif": "gif" };
 const P = {};
 let uid = null;
+
+const fl = document.createElement("link");
+fl.rel = "stylesheet";
+fl.href = "https://fonts.googleapis.com/css2?family=Caveat:wght@600&family=JetBrains+Mono:wght@600&family=Lobster&family=Nunito:wght@700&family=Playfair+Display:wght@700&display=swap";
+document.head.append(fl);
 
 const css = document.createElement("style");
 css.textContent = `
@@ -35,6 +54,7 @@ css.textContent = `
 .pbody{padding:0 20px 20px;margin-top:-36px}
 .pav{width:74px;height:74px;border-radius:50%;display:grid;place-items:center;font:800 30px var(--head);color:#10121d;border:4px solid var(--panel)}
 .pname{font:800 22px var(--head);margin:8px 0 0;overflow-wrap:anywhere}
+.pbadges{margin-top:6px}
 .pmeta{color:var(--muted);font-size:14px;margin:2px 0}
 .pstatus{margin:10px 0 0;padding:6px 12px;border-radius:999px;background:var(--raised);display:inline-block;font-size:14px}
 .psec{font-weight:700;font-size:12px;letter-spacing:.06em;color:var(--muted);margin:16px 0 4px;text-transform:uppercase}
@@ -44,9 +64,13 @@ css.textContent = `
 .prow{display:flex;gap:8px;margin-top:16px;flex-wrap:wrap}
 .pbtn{padding:9px 16px;border-radius:10px;background:var(--accent);color:var(--on-accent);font-weight:700}
 .pbtn.sec{background:var(--raised);color:var(--text)}
-.pf input,.pf textarea{display:block;width:100%;margin:4px 0 8px;padding:10px 12px;border-radius:10px;border:1px solid var(--line);background:var(--raised);color:var(--text);font:inherit}
+.pf input,.pf textarea,.pf select{display:block;width:100%;margin:4px 0 8px;padding:10px 12px;border-radius:10px;border:1px solid var(--line);background:var(--raised);color:var(--text);font:inherit}
 .pf textarea{min-height:90px;resize:vertical}
 .pf small{color:var(--muted);font-size:12px}
+.pf input.phue{-webkit-appearance:none;appearance:none;height:14px;padding:0;border-radius:7px;margin:10px 0;outline:none;background:linear-gradient(90deg,#ff0000,#ffff00,#00ff00,#00ffff,#0000ff,#ff00ff,#ff0000)}
+.phue::-webkit-slider-thumb{-webkit-appearance:none;width:22px;height:22px;border-radius:50%;background:#fff;border:3px solid #10121d;cursor:pointer}
+.phue::-moz-range-thumb{width:18px;height:18px;border-radius:50%;background:#fff;border:3px solid #10121d;cursor:pointer}
+.pf input.pcol{height:44px;padding:0;cursor:pointer}
 .psw{display:flex;gap:8px;flex-wrap:wrap;margin:6px 0 4px}
 .psw button{width:32px;height:32px;border-radius:50%;border:3px solid transparent}
 .psw button.on{border-color:var(--text)}
@@ -96,10 +120,20 @@ function fmt(el, text) {
     el.append(n || part);
   });
 }
-function setStyle(el, style, color) {
+// Style + color + font for any name
+function setStyle(el, style, color, font) {
   el.classList.remove("ns-glow", "ns-gradient", "ns-rainbow", "ns-mono", "ns-serif");
   if (style && style !== "normal" && STYLES.some((x) => x[0] === style)) el.classList.add("ns-" + style);
   el.style.color = style === "gradient" || style === "rainbow" ? "" : color || "";
+  el.style.fontFamily = font && FONTS[font] ? FONTS[font] : "";
+}
+// Turns a hue (0-360) into a hex color for the spectrum slider
+function hsl(hue, s, l) {
+  s /= 100; l /= 100;
+  const k = (n) => (n + hue / 30) % 12;
+  const a = s * Math.min(l, 1 - l);
+  const f = (n) => l - a * Math.max(-1, Math.min(k(n) - 3, Math.min(9 - k(n), 1)));
+  return "#" + [f(0), f(8), f(4)].map((x) => Math.round(x * 255).toString(16).padStart(2, "0")).join("");
 }
 function dotState(p) {
   if (!p || p.presence === "invisible") return "off";
@@ -168,10 +202,52 @@ function applyNames(root) {
   list.forEach((m) => {
     const p = P[m.dataset.user];
     const n = m.querySelector(".n");
-    if (p && n) setStyle(n, p.name_style, p.name_color);
+    if (p && n) setStyle(n, p.name_style, p.name_color, p.name_font);
     if (p) fillAv(m.querySelector(".av"), p);
   });
 }
+
+// ---- Member list names (color, style, font) ----
+function findNameNode(row) {
+  const walker = document.createTreeWalker(row, NodeFilter.SHOW_TEXT);
+  let n;
+  while ((n = walker.nextNode())) {
+    if (!n.textContent.trim()) continue;
+    if (n.parentElement.closest("button, .mact, .rbdg-wrap, .av, small")) continue;
+    return n;
+  }
+  return null;
+}
+async function paintMemberNames() {
+  const rows = [...$("memlist").querySelectorAll(":scope > div[data-user]")];
+  await loadProfiles(rows.map((r) => r.dataset.user));
+  rows.forEach((row) => {
+    const p = P[row.dataset.user];
+    if (!p) return;
+    let span = row.querySelector(".rns");
+    if (!span) {
+      if (!p.name_color && !p.name_font && (!p.name_style || p.name_style === "normal")) return;
+      const node = findNameNode(row);
+      if (!node) return;
+      span = document.createElement("span");
+      span.className = "rns";
+      node.replaceWith(span);
+      span.append(node);
+    }
+    // keep rainbow badges next to the name, not inside it
+    const w = span.querySelector(".rbdg-wrap");
+       if (w && span.nextElementSibling !== w) span.after(w);
+    setStyle(span, p.name_style, p.name_color, p.name_font);
+  });
+}
+let memQueued = false;
+function queueMembers() {
+  if (memQueued) return;
+  memQueued = true;
+  setTimeout(() => { memQueued = false; paintMemberNames(); }, 50);
+}
+new MutationObserver(queueMembers).observe($("memlist"), { childList: true, subtree: true });
+
 new MutationObserver(async () => {
   const rows = [...$("memlist").querySelectorAll(":scope > div[data-user]")];
   await loadProfiles(rows.map((r) => r.dataset.user));
@@ -183,6 +259,7 @@ new MutationObserver(async () => {
 }).observe($("memlist"), { childList: true });
 function repaintMembers() {
   [...$("memlist").querySelectorAll(":scope > div[data-user]")].forEach((r) => paintDot(r.querySelector(".av"), P[r.dataset.user]));
+  queueMembers();
 }
 function paintOwn() {
   const el = document.querySelector(".me .av");
@@ -238,6 +315,19 @@ function header(p) {
   body.append(av);
   return body;
 }
+async function showBadges(box, id) {
+  const { data } = await supabase.from("user_badges").select("badge").eq("user_id", id);
+  if (!box.isConnected || !data || !data.length) return;
+  const have = data.map((r) => r.badge);
+  const wrap = h("span", "rbdg-wrap");
+  wrap.style.margin = "0";
+  BADGE_ORDER.filter((b) => have.includes(b)).forEach((b) => {
+    const s = h("span", "rbdg", BADGE_INFO[b][0]);
+    s.title = BADGE_INFO[b][1];
+    wrap.append(s);
+  });
+  box.append(wrap);
+}
 async function openCard(id) {
   const p = await getProfile(id);
   if (!p) return toast("Could not load that profile.");
@@ -247,8 +337,11 @@ async function openCard(id) {
 function view(p) {
   const body = header(p);
   const name = h("div", "pname", p.username);
-  setStyle(name, p.name_style, p.name_color);
+  setStyle(name, p.name_style, p.name_color, p.name_font);
   body.append(name);
+  const bd = h("div", "pbadges");
+  body.append(bd);
+  showBadges(bd, p.id);
   const meta = [];
   if (p.pronouns) meta.push(p.pronouns);
   if (p.created_at) meta.push("Joined " + new Date(p.created_at).toLocaleDateString([], { month: "long", year: "numeric" }));
@@ -311,11 +404,12 @@ function edit(p) {
   let banner = p.banner || "#ffb547";
   let style = STYLES.some((x) => x[0] === p.name_style) ? p.name_style : "normal";
   let ncolor = p.name_color || null;
+  let font = FONTS[p.name_font] ? p.name_font : "";
   let acolor = p.color || "#ffb547";
   let pres = p.presence || "online";
   let avFile = null, bnFile = null, avClear = false, bnClear = false;
   const nm = h("div", "pname", p.username);
-  const prev = () => setStyle(nm, style, ncolor);
+  const prev = () => setStyle(nm, style, ncolor, font);
   prev();
   const hasAv = () => !!(avFile || (p.avatar_url && !avClear));
   const hasBn = () => !!(bnFile || (p.banner_url && !bnClear));
@@ -403,8 +497,43 @@ function edit(p) {
   }));
   body.append(h("small", "", "Shown when you have no profile picture. Other places update after a refresh."));
 
+  // ---- Name color: quick swatches + spectrum slider + exact picker ----
   body.append(h("div", "psec", "Name color"));
-  body.append(swatches(NAME_COLS, ncolor, (c) => { ncolor = c; prev(); }, "Default"));
+  const colorIn = h("input", "pcol");
+  colorIn.type = "color";
+  colorIn.value = ncolor || "#ffb547";
+  const hue = h("input", "phue");
+  hue.type = "range";
+  hue.min = "0";
+  hue.max = "360";
+  hue.value = "40";
+  hue.setAttribute("aria-label", "Name color spectrum");
+  const sw = swatches(NAME_COLS, ncolor, (c) => {
+    ncolor = c;
+    if (c) colorIn.value = c;
+    prev();
+  }, "Default");
+  const custom = (c) => {
+    ncolor = c;
+    colorIn.value = c;
+    sw.querySelectorAll("button").forEach((b) => b.classList.remove("on"));
+    prev();
+  };
+  hue.oninput = () => custom(hsl(Number(hue.value), 90, 60));
+  colorIn.oninput = () => custom(colorIn.value);
+  body.append(sw, hue, colorIn);
+
+  body.append(h("div", "psec", "Name font"));
+  const fsel = h("select");
+  FONT_NAMES.forEach(([k, label]) => {
+    const o = h("option", "", label);
+    o.value = k;
+    fsel.append(o);
+  });
+  fsel.value = font;
+  fsel.onchange = () => { font = fsel.value; prev(); };
+  body.append(fsel);
+
   body.append(h("div", "psec", "Name style"));
   const pills = h("div", "pst");
   STYLES.forEach(([k, label]) => {
@@ -416,7 +545,7 @@ function edit(p) {
     };
     pills.append(b);
   });
-  body.append(pills, nm);
+  body.append(pills, h("small", "", "Normal and Glow use your color. Gradient and Rainbow use their own colors."), nm);
 
   const row = h("div", "prow");
   const save = h("button", "pbtn", "Save profile");
@@ -441,7 +570,7 @@ function edit(p) {
         pronouns: pr.value.trim() || null,
         bio: bio.value.trim() || null,
         interests: interests || null,
-        banner, color: acolor, name_color: ncolor, name_style: style, presence: pres,
+        banner, color: acolor, name_color: ncolor, name_font: font || null, name_style: style, presence: pres,
         avatar_url, banner_url,
       })
       .eq("id", uid)

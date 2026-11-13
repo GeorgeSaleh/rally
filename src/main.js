@@ -15,6 +15,8 @@ import "./search.js";
 import "./pins.js";
 import "./badges.js";
 import "./profiles.js";
+import "./modtools.js";
+import "./extras.js";
 import "./directory.js";
 import "./friends.js";
 import "./notifications.js";
